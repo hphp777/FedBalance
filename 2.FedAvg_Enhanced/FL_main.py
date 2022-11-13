@@ -15,16 +15,11 @@ from datasets import XRaysTrainDataset
 from datasets import XRaysTestDataset
 
 # import neccesary libraries for defining the optimizers
-import torch.optim as optim
-
-from trainer import fit
 import config
-from FL import client, server
+from Base import client, server
 
 import warnings
 import random
-import importlib
-importlib.reload(models)
 
 warnings.filterwarnings(action='ignore')
 
@@ -103,16 +98,8 @@ for i in range(c_num):
 
 def draw_auc():
 
-    for i in range(2,21):
-        path = "C:/Users/hb/Desktop/code/FedAvg/models/server/FedAvg/server_" + str(i) + ".pth"
-        model = torch.load(path)
-        auc ,acc= central_server.test(model)
-        server_auc.append(auc)
-        server_acc.append(acc)
-
-    plt.plot(range(len(server_acc)), server_acc)
     plt.plot(range(len(server_auc)), server_auc)
-    plt.savefig('./results/FedAvg_acc_auc.png')
+    plt.savefig('./results/FedAvg_auc.png')
     plt.clf()
 
 def FL():
@@ -142,16 +129,21 @@ def FL():
         for key in weights[0]:
             weight[key] = sum([weights[i][key] * cw[i] for i in range(c_num)]) 
 
-        torch.save(weight, 'C:/Users/hb/Desktop/code/2.TF_to_Torch/Weight/FedAvg/server_' + str(i) + '.pth' )
+        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedAvg_Enhanced/Weight/FedAvg/FedAvg.pth' )
 
         # Test
         auc, acc = central_server.test(weight)
         if auc > best_auc:
             best_auc = auc
+            
         if acc > best_acc:
             best_acc = acc
         server_auc.append(auc)
         server_acc.append(acc)
+
+        print("Best AUC: ", best_auc)
+        print("Best Acc: ", best_acc)
+
 
     print("AUCs : ", server_auc)
     print("Best AUC: ", best_auc)

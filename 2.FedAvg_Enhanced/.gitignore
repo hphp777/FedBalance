@@ -5,3 +5,5 @@ pickles/
 Weight/
 
 __pycache__/
+
+*.png

@@ -18,7 +18,8 @@ from datasets import XRaysTestDataset
 # import neccesary libraries for defining the optimizers
 import torch.optim as optim
 
-from trainer import fit
+from FedAvg import fit
+# from FedAlign import fit
 import matplotlib.pyplot as plt
 import config
 
@@ -66,7 +67,7 @@ class server():
         parser.add_argument('--bs', type = int, default = 32, help = 'batch size')
         parser.add_argument('--lr', type = float, default = 1e-6, help = 'Learning Rate for the optimizer')
         parser.add_argument('--stage', type = int, default = 1, help = 'Stage, it decides which layers of the Neural Net to train')
-        parser.add_argument('--loss_func', type = str, default = 'FocalLoss', choices = {'BCE', 'FocalLoss'}, help = 'loss function')
+        parser.add_argument('--loss_func', type = str, default = 'BCE', choices = {'BCE', 'FocalLoss'}, help = 'loss function')
         parser.add_argument('-r','--resume', default= False ,action = 'store_true') # args.resume will return True if -r or --resume is used in the terminal
         parser.add_argument('--ckpt', type = str, help = 'Path of the ckeckpoint that you wnat to load')
         parser.add_argument('-t','--test', action = 'store_true')   # args.test   will return True if -t or --test   is used in the terminal
@@ -162,7 +163,7 @@ class client():
         parser.add_argument('--bs', type = int, default = 32, help = 'batch size')
         parser.add_argument('--lr', type = float, default = 1e-5, help = 'Learning Rate for the optimizer')
         parser.add_argument('--stage', type = int, default = 1, help = 'Stage, it decides which layers of the Neural Net to train')
-        parser.add_argument('--loss_func', type = str, default = 'FocalLoss', choices = {'BCE', 'FocalLoss'}, help = 'loss function')
+        parser.add_argument('--loss_func', type = str, default = 'BCE', choices = {'BCE', 'FocalLoss'}, help = 'loss function')
         parser.add_argument('-r','--resume', action = 'store_true') # args.resume will return True if -r or --resume is used in the terminal
         parser.add_argument('--ckpt', type = str, help = 'Path of the ckeckpoint that you wnat to load')
         parser.add_argument('-t','--test', action = 'store_true')   # args.test   will return True if -t or --test   is used in the terminal
@@ -175,7 +176,7 @@ class client():
         self.lr = self.args.lr
         self.stage = self.args.stage
 
-        self.local_epoch = 5
+        self.local_epoch = 2
 
         # select model
         # ResNet
@@ -196,20 +197,15 @@ class client():
         # mention the path of the data
         self.XRayTrain_dataset = dataloader
         XRayTest_dataset = XRaysTestDataset(data_dir, transform = config.transform)
-        self.GANTrain_dataset = GANLoader()
-        self.Total_dataset = torch.utils.data.ConcatDataset([self.XRayTrain_dataset, self.GANTrain_dataset])
-        self.dataset = self.Total_dataset
+        self.dataset = self.XRayTrain_dataset
         # self.dataset = self.XRayTrain_dataset
         train_percentage = 0.8
         train_dataset, val_dataset = torch.utils.data.random_split(self.dataset, [int(len(self.dataset)*train_percentage), len(self.dataset)-int(len(self.dataset)*train_percentage)])
 
         ori_ds_cnt = self.XRayTrain_dataset.get_ds_cnt()
-        print(ori_ds_cnt)
-        gan_ds_cnt = self.GANTrain_dataset.get_ds_cnt()
-        print(gan_ds_cnt)
 
-        total_ds_cnt = np.array(ori_ds_cnt) + np.array(gan_ds_cnt)
-        # total_ds_cnt = np.array(ori_ds_cnt)
+        # total_ds_cnt = np.array(ori_ds_cnt) + np.array(gan_ds_cnt)
+        total_ds_cnt = np.array(ori_ds_cnt)
 
         pos_freq = total_ds_cnt / total_ds_cnt.sum()
         neg_freq = 1 - pos_freq
@@ -238,7 +234,7 @@ class client():
         elif self.args.loss_func == 'BCE':
             self.loss_fn = nn.BCEWithLogitsLoss().to(self.device)
 
-        self.loss_fn = weighted_loss(pos_weights, neg_weights)
+        # self.loss_fn = weighted_loss(pos_weights, neg_weights)
 
         # Plot the disease distribution
         plt.figure(figsize=(8,4))
@@ -276,83 +272,14 @@ class client():
         self.train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
         self.val_loader = torch.utils.data.DataLoader(val_dataset, batch_size = batch_size, shuffle = not True)
 
-        if not self.args.resume:
-            print('training from scratch')
-            # import pretrained model
-            # change the last linear layer
+        for name, param in self.model.named_parameters(): # all requires_grad by default, are True initially
+            param.requires_grad = True 
 
-            print('----- STAGE 1 -----') # only training 'layer2', 'layer3', 'layer4' and 'fc'
-            for name, param in self.model.named_parameters(): # all requires_grad by default, are True initially
-                # print('{}: {}'.format(name, param.requires_grad)) # this shows True for all the parameters  
-                if ('layer2' in name) or ('layer3' in name) or ('layer4' in name) or ('fc' in name):
-                    param.requires_grad = True 
-                else:
-                    param.requires_grad = True
+        # since we are not resuming the training of the model
+        epochs_till_now = 0
 
-            # since we are not resuming the training of the model
-            epochs_till_now = 0
-
-            # making empty lists to collect all the losses
-            losses_dict = {'epoch_train_loss': [], 'epoch_val_loss': [], 'total_train_loss_list': [], 'total_val_loss_list': []}
-
-        else:
-            if self.args.ckpt == None:
-                self.q('ERROR: Please select a valid checkpoint to resume from')
-            
-            # print('\nckpt loaded: {}'.format(self.args.ckpt))
-            ckpt = torch.load(os.path.join(config.models_dir, self.args.ckpt)) 
-
-            # since we are resuming the training of the model
-            epochs_till_now = ckpt['epochs']
-            self.model = ckpt['model']
-            self.model.to(self.device)
-        
-            # loading previous loss lists to collect future losses
-            losses_dict = ckpt['losses_dict']
-
-        # printing some hyperparameters
-
-        if (not self.args.test) and (self.args.resume):
-
-            if stage == 1:
-
-                print('\n----- STAGE 1 -----') # only training 'layer2', 'layer3', 'layer4' and 'fc'
-                for name, param in self.model.named_parameters(): # all requires_grad by default, are True initially
-                # print('{}: {}'.format(name, param.requires_grad)) # this shows True for all the parameters  
-                    if ('layer2' in name) or ('layer3' in name) or ('layer4' in name) or ('fc' in name):
-                        param.requires_grad = True 
-                    else:
-                        param.requires_grad = True
-
-            elif stage == 2:
-
-                print('\n----- STAGE 2 -----') # only training 'layer3', 'layer4' and 'fc'
-                for name, param in self.model.named_parameters(): 
-                    # print('{}: {}'.format(name, param.requires_grad)) # this shows True for all the parameters  
-                    if ('layer3' in name) or ('layer4' in name) or ('fc' in name):
-                        param.requires_grad = True 
-                    else:
-                        param.requires_grad = False
-
-            elif stage == 3:
-
-                print('\n----- STAGE 3 -----') # only training  'layer4' and 'fc'
-                for name, param in self.model.named_parameters(): 
-                    # print('{}: {}'.format(name, param.requires_grad)) # this shows True for all the parameters  
-                    if ('layer4' in name) or ('fc' in name):
-                        param.requires_grad = True 
-                    else:
-                        param.requires_grad = False
-
-            elif stage == 4:
-
-                print('\n----- STAGE 4 -----') # only training 'fc'
-                for name, param in self.model.named_parameters(): 
-                    # print('{}: {}'.format(name, param.requires_grad)) # this shows True for all the parameters  
-                    if ('fc' in name):
-                        param.requires_grad = True 
-                    else:
-                        param.requires_grad = False
+        # making empty lists to collect all the losses
+        losses_dict = {'epoch_train_loss': [], 'epoch_val_loss': [], 'total_train_loss_list': [], 'total_val_loss_list': []}
 
         if not self.args.test:
             # checking the layers which are going to be trained (irrespective of args.resume)
