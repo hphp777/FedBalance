@@ -1,0 +1,9 @@
+Data_distribution/
+
+pickles/
+
+Weight/
+
+__pycache__/
+
+*.png
