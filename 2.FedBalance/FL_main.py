@@ -16,7 +16,9 @@ from datasets import XRaysTestDataset
 
 # import neccesary libraries for defining the optimizers
 import config
-from Base import client, server
+
+# from Base import client, server
+from MOONBase import client, server
 
 import warnings
 import random
@@ -129,7 +131,7 @@ def FL():
         for key in weights[0]:
             weight[key] = sum([weights[i][key] * cw[i] for i in range(c_num)]) 
 
-        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedAvg_Enhanced/Weight/FedAvg/FedAvg.pth' )
+        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedBalance/Weight/MOON/MOON.pth' )
 
         # Test
         auc, acc = central_server.test(weight)
