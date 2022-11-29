@@ -89,6 +89,16 @@ class server():
         num_ftrs = self.model.classifier[1].in_features
         self.model.classifier[1] = nn.Linear(in_features=num_ftrs, out_features=14)
 
+        # Prev model
+        self.prev_model = models.efficientnet_b0(pretrained=True)
+        num_ftrs = self.prev_model.classifier[1].in_features
+        self.prev_model.classifier[1] = nn.Linear(in_features=num_ftrs, out_features=14)
+
+        # Global model
+        self.global_model = models.efficientnet_b0(pretrained=True)
+        num_ftrs = self.global_model.classifier[1].in_features
+        self.global_model.classifier[1] = nn.Linear(in_features=num_ftrs, out_features=14)
+
         self.model.to(self.device)
         
         data_dir = "C:/Users/hb/Desktop/data/archive"
@@ -119,7 +129,7 @@ class server():
             self.loss_fn = FocalLoss(device = self.device, gamma = 2.).to(self.device)
         elif self.args.loss_func == 'BCE':
             self.loss_fn = nn.BCEWithLogitsLoss().to(self.device)
-        self.loss_fn = weighted_loss(pos_weights,neg_weights)
+        # self.loss_fn = weighted_loss(pos_weights,neg_weights)
         
 
     def test(self,weight):
@@ -144,7 +154,7 @@ class server():
         losses_dict = ckpt['losses_dict'] 
 
         auc, acc = fit(self.device, self.train_loader, self.val_loader,    
-                                        self.test_loader, self.model, self.loss_fn, 
+                                        self.test_loader, self.model,self.prev_model,self.global_model, self.loss_fn, 
                                         self.optimizer, losses_dict,
                                         epochs_till_now = epochs_till_now, epochs = 3,
                                         log_interval = 25, save_interval = 1,
@@ -314,7 +324,7 @@ class client():
         # print("Client{} Data Number".format(self.c_num),len(self.train_loader))
 
         weight = fit(self.device, self.train_loader, self.val_loader,    
-                                        self.test_loader, self.model, self.loss_fn, 
+                                        self.test_loader, self.model,self.prev_model,self.global_model, self.loss_fn, 
                                         self.optimizer, losses_dict,
                                         epochs_till_now = epochs_till_now, epochs = self.local_epoch,
                                         log_interval = 25, save_interval = 1,

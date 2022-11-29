@@ -70,6 +70,8 @@ def get_weighted_loss(pos_weights, neg_weights, epsilon=1e-7):
             loss_pos = -1 * torch.mean(pos_weights[i] * y_true[:, i] * torch.log(y_pred[:, i] + epsilon))
             loss_neg = -1 * torch.mean(neg_weights[i] * (1 - y_true[:, i]) * torch.log(1 - y_pred[:, i] + epsilon))
             loss += loss_pos + loss_neg
+            # Reweighting between classes
+            loss = neg_weights[i] * loss
         return loss
 
     return weighted_loss

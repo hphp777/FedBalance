@@ -17,8 +17,8 @@ from datasets import XRaysTestDataset
 # import neccesary libraries for defining the optimizers
 import config
 
-# from Base import client, server
-from MOONBase import client, server
+from Base import client, server
+# from MOONBase import client, server
 
 import warnings
 import random
@@ -37,6 +37,7 @@ model.to(device)
 
 c_num = 5
 com_round = 50
+client_weighting = 'Imbalance'
 
 data_dir = "C:/Users/hb/Desktop/data/archive"
 
@@ -44,7 +45,7 @@ central_data = XRaysTrainDataset(data_dir, transform = config.transform, indices
 # data0,data1,data2,data3,data4 = torch.utils.data.random_split(central_data, ratios)
 
 length = len(central_data)
-ratios = np.round(np.random.dirichlet(np.repeat(10, c_num))*length).astype(int)
+ratios = np.round(np.random.dirichlet(np.repeat(1, c_num))*length).astype(int)
 indices = list(range(length))
 random.shuffle(indices)
 
@@ -84,7 +85,14 @@ client2 = client(2, XRayTrain_dataset2)
 client3 = client(3, XRayTrain_dataset3)
 client4 = client(4, XRayTrain_dataset4)
 
+imbalance0 = client0.imbalance
+imbalance1 = client1.imbalance
+imbalance2 = client2.imbalance
+imbalance3 = client3.imbalance
+imbalance4 = client4.imbalance
+
 clients = [client0,client1,client2,client3,client4]
+imbalances = np.array([imbalance0,imbalance1,imbalance2,imbalance3,imbalance4])
 weights = [0] * 5
 weight = model.state_dict()
 server_auc = []
@@ -95,8 +103,15 @@ best_auc = 0
 total_data_num = length
 
 cw = []
-for i in range(c_num):
-    cw.append(len(clients[i].dataset) / total_data_num)
+
+def set_weight_client(client_weighting):
+
+    if client_weighting == 'DataAmount':
+        for i in range(c_num):
+            cw.append(len(clients[i].dataset) / total_data_num)
+    elif client_weighting == 'Imbalance':
+        for i in range(c_num):
+            cw.append(imbalances[i] / imbalances.sum())
 
 def draw_auc():
 
@@ -105,6 +120,8 @@ def draw_auc():
     plt.clf()
 
 def FL():
+
+    set_weight_client(client_weighting)
 
     print("\nCommunication Round 1")
 
@@ -131,7 +148,7 @@ def FL():
         for key in weights[0]:
             weight[key] = sum([weights[i][key] * cw[i] for i in range(c_num)]) 
 
-        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedBalance/Weight/MOON/MOON.pth' )
+        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedBalance/Weight/Finals/Reweighting_between_classes.pth' )
 
         # Test
         auc, acc = central_server.test(weight)

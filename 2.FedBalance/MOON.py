@@ -203,7 +203,7 @@ def make_divisible(v, divisor=8, min_value=1):
         new_v += divisor
     return new_v
 
-def train_epoch(device, train_loader, model,prev_model,global_model, loss_fn, optimizer, epochs_till_now, final_epoch, log_interval, algorithm = None):
+def train_epoch(device, train_loader, model, prev_model, global_model, loss_fn, optimizer, epochs_till_now, final_epoch, log_interval, algorithm = None):
     '''
     Takes in the data from the 'train_loader', calculates the loss over it using the 'loss_fn' 
     and optimizes the 'model' using the 'optimizer'  
@@ -216,6 +216,7 @@ def train_epoch(device, train_loader, model,prev_model,global_model, loss_fn, op
     temp = 0.5
     running_train_loss = 0
     train_loss_list = []
+    criterion = torch.nn.CrossEntropyLoss().to(device)
 
     sigmoid = torch.nn.Sigmoid()
     total = 0
@@ -230,29 +231,26 @@ def train_epoch(device, train_loader, model,prev_model,global_model, loss_fn, op
         
         optimizer.zero_grad()    
         # t_feats, out = model.extract_feature(img)
-        out = model(img)  
-        glo_out = global_model(img)
+        pro1, out = model.moon(img)  
+        pro2, _ = global_model.moon(img)
 
-        posi = cos(out, glo_out)
+        posi = cos(pro1, pro2)
         logits = posi.reshape(-1,1)
 
-        prev_out = prev_model(img)
-        nega = cos(out, prev_out)
+        pro3, _ = prev_model.moon(img)
+        nega = cos(pro1, pro3)
 
         logits = torch.cat((logits, nega.reshape(-1,1)), dim=1)
         logits /= temp
+        labels = torch.zeros(img.size(0)).to(device).long()
 
         loss1 = loss_fn(out, target)
-        loss2 = mu * loss_fn(logits, target)
+        loss2 = mu * criterion(logits, labels)
         loss = loss1 + loss2
-        # sig_out = sigmoid(out)
-        # loss = loss_fn(sig_out, target)
-        loss_ori = loss
+
         running_train_loss += loss*img.shape[0]
         train_loss_list.append(loss.item())
-        # weighted
-        # train_loss_list.append(loss.cpu().detach().numpy())
-
+ 
         preds = np.round(sigmoid(out).cpu().detach().numpy())
         targets = target.cpu().detach().numpy()
 
@@ -263,21 +261,6 @@ def train_epoch(device, train_loader, model,prev_model,global_model, loss_fn, op
         loss.backward()
         optimizer.step()
 
-        # if algorithm == 'FedAlign':
-        #     loss_CE = loss.item()
-
-        #     t = t_feats[-2].detach()
-        #     x2 = t[:, :make_divisible(t.shape[1]*0.25)] # 마지막 에서 두번 째 블록
-        #     x3 = model.layer4(t).detach()
-        #     s_feats = [x2, x3]
-        #     # s_feats = model.reuse_feature(t)
-        #     TM_s = torch.bmm(transmitting_matrix(s_feats[-2], s_feats[-1]), transmitting_matrix(s_feats[-2], s_feats[-1]).transpose(2,1)) # small block
-        #     TM_t = torch.bmm(transmitting_matrix(t_feats[-2].detach(), t_feats[-1].detach()), transmitting_matrix(t_feats[-2].detach(), t_feats[-1].detach()).transpose(2,1)) # big block
-        #     loss = F.mse_loss(top_eigenvalue(K=TM_s), top_eigenvalue(K=TM_t))
-        #     loss = 0.45*(loss_CE/loss.item())*loss
-        #     loss.requires_grad_(True)
-        #     loss.backward()
-        
         if (batch_idx+1)%log_interval == 0:
             # batch metric evaluation
 # #             out_detached = out.detach()

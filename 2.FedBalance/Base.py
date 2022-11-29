@@ -18,9 +18,9 @@ from datasets import XRaysTestDataset
 # import neccesary libraries for defining the optimizers
 import torch.optim as optim
 
-# from FedAvg import fit
+from FedAvg import fit
 # from FedAlign import fit
-from FedProx import fit
+# from FedProx import fit
 import matplotlib.pyplot as plt
 import config
 
@@ -57,6 +57,7 @@ class weighted_loss():
             loss_pos =  -1 * torch.mean(self.pos_weights[i] * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
             loss_neg =  -1 * torch.mean(self.neg_weights[i] * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
             loss += loss_pos + loss_neg
+            # loss = (1 / self.neg_weights[i]) * loss * 0.05
         return loss
 
 class server():
@@ -208,6 +209,21 @@ class client():
         # total_ds_cnt = np.array(ori_ds_cnt) + np.array(gan_ds_cnt)
         total_ds_cnt = np.array(ori_ds_cnt)
 
+        # Normalize the imbalance
+        self.imbalance = 0
+        difference_cnt = total_ds_cnt - total_ds_cnt.mean()
+        for i in range(len(difference_cnt)):
+            difference_cnt[i] = difference_cnt[i] * difference_cnt[i]        
+        for i in range(len(difference_cnt)):
+            difference_cnt[i] = difference_cnt[i] / difference_cnt.sum()
+        
+        # Calculate the level of imbalnce
+        difference_cnt -= difference_cnt.mean()
+        for i in range(len(difference_cnt)):
+            difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
+    
+        self.imbalance = difference_cnt.sum()
+
         pos_freq = total_ds_cnt / total_ds_cnt.sum()
         neg_freq = 1 - pos_freq
 
@@ -235,7 +251,7 @@ class client():
         elif self.args.loss_func == 'BCE':
             self.loss_fn = nn.BCEWithLogitsLoss().to(self.device)
 
-        # self.loss_fn = weighted_loss(pos_weights, neg_weights)
+        self.loss_fn = weighted_loss(pos_weights, neg_weights)
 
         # Plot the disease distribution
         plt.figure(figsize=(8,4))
