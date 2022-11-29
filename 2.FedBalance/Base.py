@@ -222,7 +222,8 @@ class client():
         for i in range(len(difference_cnt)):
             difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
     
-        self.imbalance = difference_cnt.sum()
+        self.imbalance = 1 / difference_cnt.sum()
+
 
         pos_freq = total_ds_cnt / total_ds_cnt.sum()
         neg_freq = 1 - pos_freq

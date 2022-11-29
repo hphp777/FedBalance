@@ -122,6 +122,7 @@ def draw_auc():
 def FL():
 
     set_weight_client(client_weighting)
+    print(cw)
 
     print("\nCommunication Round 1")
 
@@ -148,7 +149,7 @@ def FL():
         for key in weights[0]:
             weight[key] = sum([weights[i][key] * cw[i] for i in range(c_num)]) 
 
-        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedBalance/Weight/Finals/Reweighting_between_classes.pth' )
+        torch.save(weight, 'C:/Users/hb/Desktop/code/2.FedBalance/Weight/Finals/fedavg_weighted_loss_Imbalance_weight(alpha=1).pth' )
 
         # Test
         auc, acc = central_server.test(weight)
