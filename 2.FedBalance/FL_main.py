@@ -37,7 +37,8 @@ model.to(device)
 
 c_num = 5
 com_round = 50
-client_weighting = 'Imbalance'
+client_weighting = 'DataAmount'
+alpha = 0.5
 
 data_dir = "C:/Users/hb/Desktop/data/archive"
 
@@ -45,7 +46,7 @@ central_data = XRaysTrainDataset(data_dir, transform = config.transform, indices
 # data0,data1,data2,data3,data4 = torch.utils.data.random_split(central_data, ratios)
 
 length = len(central_data)
-ratios = np.round(np.random.dirichlet(np.repeat(1, c_num))*length).astype(int)
+ratios = np.round(np.random.dirichlet(np.repeat(alpha, c_num))*length).astype(int)
 indices = list(range(length))
 random.shuffle(indices)
 
@@ -112,6 +113,13 @@ def set_weight_client(client_weighting):
     elif client_weighting == 'Imbalance':
         for i in range(c_num):
             cw.append(imbalances[i] / imbalances.sum())
+    elif client_weighting == 'Mix':
+        temp = []
+        for i in range(c_num):
+            temp.append((len(clients[i].dataset) / total_data_num) * (imbalances[i] / imbalances.sum()))
+        temp = np.array(temp)
+        for i in range(c_num):
+            cw.append(temp[i] / temp.sum())
 
 def draw_auc():
 
@@ -135,7 +143,7 @@ def FL():
     # Test
     auc ,acc= central_server.test(weight)
     best_acc = acc
-    best_auc =auc
+    best_auc = auc
     server_auc.append(auc)
     server_acc.append(acc)
 

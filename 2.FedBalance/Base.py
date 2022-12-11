@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import cv2
+import math
 
 import torch
 import torch.nn as nn
@@ -37,6 +38,42 @@ class weighted_loss():
     def __init__(self, pos_weights, neg_weights):
         self.pos_weights = pos_weights
         self.neg_weights = neg_weights
+
+    def __call__(self, y_pred, y_true, epsilon=1e-7):
+        """
+        Return weighted loss value. 
+
+        Args:
+            y_true (Tensor): Tensor of true labels, size is (num_examples, num_classes)
+            y_pred (Tensor): Tensor of predicted labels, size is (num_examples, num_classes)
+        Returns:
+            loss (Float): overall scalar loss summed across all classes
+        """
+        # initialize loss to zero
+        loss = 0.0
+        sigmoid = nn.Sigmoid()
+        
+        for i in range(len(self.pos_weights)):
+            # for each class, add average weighted loss for that class 
+            loss_pos =  -1 * torch.mean(self.pos_weights[i] * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
+            loss_neg =  -1 * torch.mean(self.neg_weights[i] * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
+            loss += loss_pos + loss_neg
+            # loss = (1 / self.neg_weights[i]) * loss * 0.05
+        return loss
+
+class Effective_PNB_loss():
+
+    def __init__(self, pos_preq, neg_freq):
+        self.beta = 0.9
+        self.pos_weights = self.get_inverse_effective_number(self.beta, pos_preq)
+        self.neg_weights = self.get_inverse_effective_number(self.beta, neg_freq)
+
+    def get_inverse_effective_number(self, beta, freq): # beta is same for all classes
+        sons = freq
+        for i in range(len(freq)):
+            sons[i] = math.pow(beta,freq[i])
+        En = (1 - sons) / (1 - beta)
+        return (1 / En) # the form of vector
 
     def __call__(self, y_pred, y_true, epsilon=1e-7):
         """
@@ -224,9 +261,13 @@ class client():
     
         self.imbalance = 1 / difference_cnt.sum()
 
-
+        # for original PNB loss
         pos_freq = total_ds_cnt / total_ds_cnt.sum()
         neg_freq = 1 - pos_freq
+
+        # for effective PNB loss
+        raw_pos_freq = total_ds_cnt
+        raw_neg_freq = total_ds_cnt.sum() - total_ds_cnt
 
         pos_weights = neg_freq
         neg_weights = pos_freq
@@ -251,8 +292,10 @@ class client():
             self.loss_fn = FocalLoss(device = self.device, gamma = 2.).to(self.device)
         elif self.args.loss_func == 'BCE':
             self.loss_fn = nn.BCEWithLogitsLoss().to(self.device)
-
-        self.loss_fn = weighted_loss(pos_weights, neg_weights)
+        elif self.args.loss_func == 'PNB':
+            self.loss_fn = weighted_loss(pos_weights, neg_weights)
+        elif self.args.loss_func == 'EPNB':
+            self.loss_fn = Effective_PNB_loss(raw_pos_freq, raw_neg_freq)
 
         # Plot the disease distribution
         plt.figure(figsize=(8,4))
