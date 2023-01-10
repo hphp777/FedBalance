@@ -15,7 +15,10 @@ class Client(Base_Client):
         self.prev_model = self.model_type(self.num_classes, KD=True, projection=True)
         # self.prev_model.load_state_dict(self.model.state_dict())
         self.global_model = self.model_type(self.num_classes, KD=True, projection=True)
-        self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
+        if 'NIH' in self.dir or 'ChexPert' in self.dir:
+            self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.lr, momentum=0.9, weight_decay=self.args.wd, nesterov=True)
         self.cos = torch.nn.CosineSimilarity(dim=-1)
         self.temp = 0.5

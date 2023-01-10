@@ -26,10 +26,13 @@ import data_preprocessing.custom_multiprocess as cm
 def add_args(parser):
     # Training settings
     parser.add_argument('--method', type=str, default='fedavg', metavar='N',
-                        help='Options are: fedavg, fedprox, moon, mixup, stochdepth, gradaug, fedalign')
+                        help='Options are: fedavg, fedprox, moon, fedalign')
 
     parser.add_argument('--data_dir', type=str, default="C:/Users/hb/Desktop/data/NIH",
                         help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", ChexPert')
+
+    parser.add_argument('--dataset', type=str, default="NIH",
+                        help='data directory: cifar100, cifar10, "NIH", ChexPert')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')
@@ -72,7 +75,7 @@ def add_args(parser):
     parser.add_argument('--save_client', action='store_true', default=False,
                         help='Save client checkpoints each round')
 
-    parser.add_argument('--thread_number', type=int, default=5, metavar='NN',
+    parser.add_argument('--thread_number', type=int, default=1, metavar='NN',
                         help='number of parallel training threads')
 
     parser.add_argument('--client_sample', type=float, default=1.0, metavar='MT',
@@ -101,7 +104,6 @@ def set_random_seed(seed=1):
 
 # Helper Functions
 def init_process(q, Client):
-    print("init")
     # q is the client info
     set_random_seed()
     global client # 새롭게 클라이언트를 전역으로 선언
@@ -165,21 +167,21 @@ if __name__ == "__main__":
         Model = resnet56 
         server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
-                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num} for i in range(args.thread_number)]
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='fedprox':
         Server = fedprox.Server
         Client = fedprox.Client
         Model = resnet56 
         server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
-                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num} for i in range(args.thread_number)]
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='moon':
         Server = moon.Server
         Client = moon.Client
         Model = resnet56 
         server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
-                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num} for i in range(args.thread_number)]
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='fedalign':
         Server = fedalign.Server
         Client = fedalign.Client
@@ -189,7 +191,7 @@ if __name__ == "__main__":
         server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
-                            'width_range': width_range, 'resolutions': resolutions} for i in range(args.thread_number)]
+                            'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir} for i in range(args.thread_number)]
     else:
         raise ValueError('Invalid --method chosen! Please choose from availible methods.')
     
@@ -207,8 +209,7 @@ if __name__ == "__main__":
     # thread 갯수 만큼의 client_dict와 client객체 하나를 인수로 넘겨줌 
     # -> thread 갯수 만큼의 client 생성
     # init server
-    server_dict['save_path'] = '{}/logs/{}__{}_e{}_c{}'.format(os.getcwd(),
-        time.strftime("%Y%m%d_%H%M%S"), args.method, args.epochs, args.client_number)
+    server_dict['save_path'] = '{}/logs/{}__{}__{}_e{}_c{}'.format(os.getcwd(), args.dataset, time.strftime("%Y%m%d_%H%M%S"), args.method, args.epochs, args.client_number)
     if not os.path.exists(server_dict['save_path']):
         os.makedirs(server_dict['save_path'])
     server = Server(server_dict, args) # Server initializaion
@@ -217,7 +218,7 @@ if __name__ == "__main__":
     # weight of the server
     # Start Federated Training
     # the length is the number of treads
-    time.sleep(150*(args.client_number/5)) #  Allow time for threads to start up
+    time.sleep(150*(args.client_number/16)) #  Allow time for threads to start up
     for r in range(args.comm_round):
         logging.info('************** Round: {} ***************'.format(r))
         round_start = time.time()

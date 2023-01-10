@@ -74,7 +74,7 @@ class NIHTrainDataset(Dataset):
         self.df = self.get_df()
         self.make_pkl_dir(config.pkl_dir_path)
         self.the_chosen = indices
-        self.new_df = self.train_val_df.iloc[self.the_chosen, :] # this is the sampled train_val data
+        
         self.disease_cnt = [0]*14
         self.all_classes = ['Cardiomegaly','Emphysema','Effusion','Hernia','Infiltration','Mass','Nodule','Atelectasis','Pneumothorax','Pleural_Thickening','Pneumonia','Fibrosis','Edema','Consolidation', 'No Finding']
         
@@ -89,6 +89,7 @@ class NIHTrainDataset(Dataset):
             with open(os.path.join(config.pkl_dir_path, config.train_val_df_pkl_path), 'rb') as handle:
                 self.train_val_df = pickle.load(handle)
         
+        self.new_df = self.train_val_df.iloc[self.the_chosen, :] # this is the sampled train_val data
     
         if not os.path.exists(os.path.join(config.pkl_dir_path, config.disease_classes_pkl_path)):
             # pickle dump the classes list
@@ -123,6 +124,7 @@ class NIHTrainDataset(Dataset):
         self.imbalance = 1 / difference_cnt.sum()
 
         # Plot the disease distribution
+        self.all_classes = ['Cardiomegaly','Emphysema','Effusion','Hernia','Infiltration','Mass','Nodule','Atelectasis','Pneumothorax','Pleural_Thickening','Pneumonia','Fibrosis','Edema','Consolidation']
         plt.figure(figsize=(8,4))
         plt.title('Client{} Disease Distribution'.format(c_num), fontsize=20)
         plt.bar(self.all_classes,self.total_ds_cnt)
@@ -130,7 +132,7 @@ class NIHTrainDataset(Dataset):
         plt.gcf().subplots_adjust(bottom=0.40)
         plt.xticks(rotation = 90)
         plt.xlabel('Diseases')
-        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_clean/results/Client{}_disease_distribution.png'.format(c_num))
+        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_mp/data/NIH/Client{}_disease_distribution.png'.format(c_num))
         plt.clf()
 
     def get_ds_cnt(self, c_num):
@@ -171,7 +173,8 @@ class NIHTrainDataset(Dataset):
 
         self.all_classes = ['Cardiomegaly','Emphysema','Effusion','Hernia','Infiltration','Mass','Nodule','Atelectasis','Pneumothorax','Pleural_Thickening','Pneumonia','Fibrosis','Edema','Consolidation', 'No Finding']
         row = self.new_df.iloc[index, :]
-        img = cv2.imread(row['image_links'])
+        # img = cv2.imread(row['image_links'])
+        img = Image.open(row['image_links'])
         labels = str.split(row['Finding Labels'], '|')
         target = torch.zeros(len(self.all_classes))
         new_target = torch.zeros(len(self.all_classes) - 1)
@@ -196,7 +199,7 @@ class NIHTrainDataset(Dataset):
         return merged_df
     
     def get_train_val_list(self):
-        f = open("C:/Users/hb/Desktop/data/archive/train_val_list.txt", 'r')
+        f = open("C:/Users/hb/Desktop/data/NIH/train_val_list.txt", 'r')
         train_val_list = str.split(f.read(), '\n')
         return train_val_list
 
@@ -283,7 +286,7 @@ class NIHTestDataset(Dataset):
         return test_df
 
     def get_test_list(self):
-        f = open( os.path.join('C:/Users/hb/Desktop/data/archive', 'test_list.txt'), 'r')
+        f = open( os.path.join('C:/Users/hb/Desktop/data/NIH', 'test_list.txt'), 'r')
         test_list = str.split(f.read(), '\n')
         return test_list
 
@@ -326,7 +329,7 @@ class ChexpertTrainDataset(Dataset):
         plt.gcf().subplots_adjust(bottom=0.40)
         plt.xticks(rotation = 90)
         plt.xlabel('Diseases')
-        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_clean/result/Client{}_disease_distribution.png'.format(c_num))
+        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_mp/data/ChexPert/Client{}_disease_distribution.png'.format(c_num))
         plt.clf()
 
     def __getitem__(self, index):
@@ -450,9 +453,8 @@ def _data_transforms_imagenet(datadir):
 def _data_transforms_NIH():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([transforms.ToPILImage(), 
-                    transforms.ToTensor(),
-                    normalize])
+    transform = transforms.Compose([transforms.ToTensor(),
+                                    normalize])
     return transform
 
 def _data_transforms_ChexPert():
@@ -475,7 +477,6 @@ def load_data(datadir):
     y_train, y_test = train_ds.target, test_ds.target
 
     return (y_train, y_test)
-
 
 def partition_data(datadir, partition, n_nets, alpha):
     logging.info("*********partition data***************")
@@ -504,7 +505,6 @@ def partition_data(datadir, partition, n_nets, alpha):
             for j in range(n_nets):
                 np.random.shuffle(idx_batch[j]) # shuffle once more
                 net_dataidx_map[j] = idx_batch[j]
-            print(net_dataidx_map)
             return net_dataidx_map
         else:
             y_train, y_test = load_data(datadir)
@@ -549,7 +549,6 @@ def partition_data(datadir, partition, n_nets, alpha):
             # the number of class, shuffled indices, record of it
             return class_num, net_dataidx_map, traindata_cls_counts
 
-
 # for centralized training
 def get_dataloader(datadir, train_bs, test_bs, dataidxs=None):
     ################datadir is the key to discern the dataset#######################
@@ -590,9 +589,9 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         length = len(train_data_global)
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
-        indices = distribute_indices(length, 1, client_number)
+        # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
-            data = NIHTrainDataset(i, transform = _data_transforms_NIH(), indices=indices[i])
+            data = NIHTrainDataset(i, data_dir, transform = _data_transforms_NIH(), indices=indices[i])
             data_imbalances.append(data.imbalance)
             train_percentage = 0.8
             train_dataset, val_dataset = torch.utils.data.random_split(data, [int(len(data)*train_percentage), len(data)-int(len(data)*train_percentage)])
@@ -609,7 +608,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         length = len(train_data_global)
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
-        indices = distribute_indices(length, 1, client_number)
+        # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
             train_data_local_dict[i] = ChexpertTrainDataset(i, transform = _data_transforms_NIH(), indices=indices[i])
             data_imbalances.append(data.imbalance)

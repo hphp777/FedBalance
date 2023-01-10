@@ -2,6 +2,8 @@ import torch
 import logging
 import json
 from torch.multiprocessing import current_process
+import numpy as np
+import os
 
 
 class Base_Client():
@@ -11,6 +13,7 @@ class Base_Client():
         self.device = 'cuda:{}'.format(client_dict['device'])
         self.model_type = client_dict['model_type'] # model type is the model itself
         self.num_classes = client_dict['num_classes']
+        self.dir = client_dict['dir']
         self.args = args
         self.round = 0
         self.client_map = client_dict['client_map']
@@ -53,12 +56,18 @@ class Base_Client():
         for epoch in range(self.args.epochs):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.train_dataloader):
-                labels = labels.type(torch.LongTensor)
                 # logging.info(images.shape)
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
-                log_probs = self.model(images)
-                loss = self.criterion(log_probs, labels)
+
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    out = self.model(images)  
+                    loss = self.criterion(out, labels.type(torch.FloatTensor).to(self.device))
+                else:
+                    log_probs = self.model(images)
+                    loss = self.criterion(log_probs, labels.type(torch.LongTensor).to(self.device))
+                
+                
                 loss.backward()
                 self.optimizer.step()
                 batch_loss.append(loss.item())
@@ -72,7 +81,7 @@ class Base_Client():
     def test(self):
         self.model.to(self.device)
         self.model.eval()
-
+        sigmoid = torch.nn.Sigmoid()
         test_correct = 0.0
         test_loss = 0.0
         test_sample_number = 0.0
@@ -81,13 +90,15 @@ class Base_Client():
                 target = target.type(torch.LongTensor)
                 x = x.to(self.device)
                 target = target.to(self.device)
-
                 pred = self.model(x)
-                # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
-
-                test_correct += correct.item()
+                
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    preds = np.round(sigmoid(pred).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                else:
+                    _, predicted = torch.max(pred, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
                 # test_loss += loss.item() * target.size(0)
                 test_sample_number += target.size(0)
             acc = (test_correct / test_sample_number)*100
@@ -114,6 +125,10 @@ class Base_Server():
         if acc > self.acc:
             torch.save(self.model.state_dict(), '{}/{}.pt'.format(self.save_path, 'server'))
             self.acc = acc
+        acc_path = '{}/logs/{}_{}_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.args.method)
+        f = open(acc_path, 'w')
+        f.write(str(acc) + '\n')
+        f.close
         return server_outputs
     
     def start(self):
