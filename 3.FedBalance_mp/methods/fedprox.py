@@ -31,8 +31,12 @@ class Client(Base_Client):
                 # logging.info(images.shape)
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
-                log_probs = self.model(images)
-                loss = self.criterion(log_probs, labels)
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    log_probs = self.model(images)
+                    loss = self.criterion(log_probs, labels.type(torch.FloatTensor).to(self.device))
+                else:
+                    log_probs = self.model(images)
+                    loss = self.criterion(log_probs, labels.type(torch.LongTensor).to(self.device))
                 ############
                 # for fedprox
                 fed_prox_reg = 0.0

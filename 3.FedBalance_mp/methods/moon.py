@@ -7,6 +7,8 @@ import torch
 import logging
 from methods.base import Base_Client, Base_Server
 from torch.multiprocessing import current_process
+import numpy as np
+from sklearn.metrics import roc_auc_score
 
 class Client(Base_Client):
     def __init__(self, client_dict, args):
@@ -72,7 +74,12 @@ class Client(Base_Client):
 
                 loss2 = self.args.mu * self.criterion(logits, labels)
 
-                loss1 = self.criterion(out, target)
+                # loss1 = self.criterion(out, target)
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    loss1 = self.criterion(out, labels.type(torch.FloatTensor).to(self.device))
+                else:
+                    loss1 = self.criterion(out, labels.type(torch.LongTensor).to(self.device))
+                
                 loss = loss1 + loss2
                 #####
                 loss.backward()
@@ -89,26 +96,46 @@ class Client(Base_Client):
     def test(self):
         self.model.to(self.device)
         self.model.eval()
-
+        sigmoid = torch.nn.Sigmoid()
         test_correct = 0.0
-        test_loss = 0.0
         test_sample_number = 0.0
+
+        val_loader_examples_num = len(self.test_dataloader.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
+
         with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(self.train_dataloader):
+            for batch_idx, (x, target) in enumerate(self.test_dataloader):
                 x = x.to(self.device)
                 target = target.to(self.device)
 
-                _, pred = self.model(x)
-                # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
+                _, out = self.model(x)
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
+                else:
+                    _, predicted = torch.max(out, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
+                    test_sample_number += target.size(0)
 
-                test_correct += correct.item()
-                # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
-        return acc
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                try:
+                    auc = roc_auc_score(gt, probs)
+                except:
+                    auc = 0
+                logging.info("************* Client {} AUC = {:.2f},  Acc = {:.2f}**************".format(self.client_index, auc, acc))
+                return auc
+            else:
+                logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                return acc
 
 class Server(Base_Server):
     def __init__(self,server_dict, args):
@@ -139,19 +166,38 @@ class Server(Base_Server):
         test_correct = 0.0
         test_loss = 0.0
         test_sample_number = 0.0
+        sigmoid = torch.nn.Sigmoid()
+        val_loader_examples_num = len(self.test_data.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
+
         with torch.no_grad():
             for batch_idx, (x, target) in enumerate(self.test_data):
                 x = x.to(self.device)
                 target = target.to(self.device)
+                _, out = self.model(x)
 
-                _, pred = self.model(x)
-                # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
+                else:
+                    _, predicted = torch.max(out, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
+                    # test_loss += loss.item() * target.size(0)
+                    test_sample_number += target.size(0)
 
-                test_correct += correct.item()
-                # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Server Acc = {:.2f} **************".format(acc))
-        return acc
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                auc = roc_auc_score(gt, probs)
+                logging.info("***** Server AUC = {:.4f} ,Acc = {:.4f} *********************************************************************".format(auc, acc))
+                return auc
+            else:
+                logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
+                return acc

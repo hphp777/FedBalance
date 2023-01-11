@@ -37,7 +37,7 @@ def add_args(parser):
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')
 
-    parser.add_argument('--partition_alpha', type=float, default=0.5, metavar='PA',
+    parser.add_argument('--partition_alpha', type=float, default=1, metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
     parser.add_argument('--client_number', type=int, default=10, metavar='NN',
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     # train_data_local_dict, test_data_local_dict = each clients' train, test dataloader
 
     mapping_dict = allocate_clients_to_threads(args) # client에게 할당된 thread number
-    print(mapping_dict)
+    print("Client allocation for the threads during commication round : ", mapping_dict)
     # {0: [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]] ...
     # init method and model type
     # client를 여러개 생성하지 않았다는 특징이 있음
@@ -165,21 +165,21 @@ if __name__ == "__main__":
         Server = fedavg.Server
         Client = fedavg.Client
         Model = resnet56 
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='fedprox':
         Server = fedprox.Server
         Client = fedprox.Client
         Model = resnet56 
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='moon':
         Server = moon.Server
         Client = moon.Client
         Model = resnet56 
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='fedalign':
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         Model = resnet56_fedalign 
         width_range = [args.width, 1.0]
         resolutions = [32] if 'cifar' in args.data_dir else [224]
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
                             'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir} for i in range(args.thread_number)]
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # the length is the number of treads
     time.sleep(150*(args.client_number/16)) #  Allow time for threads to start up
     for r in range(args.comm_round):
-        logging.info('************** Round: {} ***************'.format(r))
+        logging.info('***** Round: {} ************************'.format(r))
         round_start = time.time()
         # server output length :        
         # map 함수는 자체적으로 iteration 기능이 포함되어있어서 thread에 갯수만큼 server output을 하나씩 run_client에 넣어주면서 thread의 갯수만큼 실행됨
@@ -228,11 +228,11 @@ if __name__ == "__main__":
         client_outputs = [c for sublist in client_outputs for c in sublist]  ##########자세히 client output form 확인 요망
         # sublist : 'weights': OrderedDict
         # length : the number of clients
-        # c is the weight of a client
+        # c is the weight of a client   
         server_outputs = server.run(client_outputs) # client_output에 imbalance를 집어 넣는 것도 좋을 듯
         round_end = time.time()
         total_sec = round_end-round_start
-        total_min = (total_sec) % 60
-        logging.info('Round {} Time: {}m {}s'.format(r, total_min, total_sec - 60 * total_min))
+        total_min = (total_sec) // 60
+        logging.info('Round {} Time: {:.0f}m {:.0f}s'.format(r, total_min, total_sec % 60))
     pool.close()
     pool.join()

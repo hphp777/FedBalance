@@ -4,6 +4,7 @@ import json
 from torch.multiprocessing import current_process
 import numpy as np
 import os
+from sklearn.metrics import roc_auc_score,  roc_curve
 
 
 class Base_Client():
@@ -83,27 +84,44 @@ class Base_Client():
         self.model.eval()
         sigmoid = torch.nn.Sigmoid()
         test_correct = 0.0
-        test_loss = 0.0
         test_sample_number = 0.0
+        val_loader_examples_num = len(self.test_dataloader.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
         with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(self.train_dataloader):
+            for batch_idx, (x, target) in enumerate(self.test_dataloader):
                 target = target.type(torch.LongTensor)
                 x = x.to(self.device)
                 target = target.to(self.device)
-                pred = self.model(x)
+                out = self.model(x)
                 
                 if 'NIH' in self.dir or 'ChexPert' in self.dir:
-                    preds = np.round(sigmoid(pred).cpu().detach().numpy())
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
                     targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
                 else:
-                    _, predicted = torch.max(pred, 1)
+                    _, predicted = torch.max(out, 1)
                     correct = predicted.eq(target).sum()
                     test_correct += correct.item()
-                # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
+                    # test_loss += loss.item() * target.size(0)
+                    test_sample_number += target.size(0)
+            
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
-        return acc
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                try:
+                    auc = roc_auc_score(gt, probs)
+                except:
+                    auc = 0
+                logging.info("************* Client {} AUC = {:.2f},  Acc = {:.2f}**************".format(self.client_index, auc, acc))
+                return auc
+            else:
+                logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                return acc
     
 class Base_Server():
     def __init__(self,server_dict, args):
@@ -112,6 +130,7 @@ class Base_Server():
         self.device = 'cuda:{}'.format(torch.cuda.device_count()-1)
         self.model_type = server_dict['model_type']
         self.num_classes = server_dict['num_classes']
+        self.dir = server_dict['dir']
         self.acc = 0.0
         self.round = 0
         self.args = args
@@ -125,10 +144,10 @@ class Base_Server():
         if acc > self.acc:
             torch.save(self.model.state_dict(), '{}/{}.pt'.format(self.save_path, 'server'))
             self.acc = acc
-        acc_path = '{}/logs/{}_{}_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.args.method)
-        f = open(acc_path, 'w')
+        acc_path = '{}/logs/{}_{}_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
+        f = open(acc_path, 'a')
         f.write(str(acc) + '\n')
-        f.close
+        f.close()
         return server_outputs
     
     def start(self):
@@ -160,24 +179,43 @@ class Base_Server():
     def test(self):
         self.model.to(self.device)
         self.model.eval()
-
+        sigmoid = torch.nn.Sigmoid()
         test_correct = 0.0
         test_loss = 0.0
         test_sample_number = 0.0
+        val_loader_examples_num = len(self.test_data.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
         with torch.no_grad():
             for batch_idx, (x, target) in enumerate(self.test_data):
                 target = target.type(torch.LongTensor)
                 x = x.to(self.device)
                 target = target.to(self.device)
-
-                pred = self.model(x)
+                out = self.model(x)
                 # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
+                else:
+                    _, predicted = torch.max(out, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
+                    test_sample_number += target.size(0)
 
-                test_correct += correct.item()
+                
                 # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
+                
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Server Acc = {:.2f} **************".format(acc))
-        return acc
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                auc = roc_auc_score(gt, probs)
+                logging.info("***** Server AUC = {:.4f} ,Acc = {:.4f} *********************************************************************".format(auc, acc))
+                return auc
+            else:
+                logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
+                return acc

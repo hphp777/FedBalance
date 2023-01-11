@@ -490,6 +490,7 @@ def partition_data(datadir, partition, n_nets, alpha):
 
     elif partition == "hetero":
         net_dataidx_map = {}
+        min_size = 0
         idx_batch = [[] for _ in range(n_nets)] # n_nuts : the number of clients
         # [[], [], [], [], [], [], [], [], [], []] # the number of clients
         # for each class in the dataset
@@ -497,11 +498,13 @@ def partition_data(datadir, partition, n_nets, alpha):
             N = 86336
             idx_k = np.array(list(range(N)))
             np.random.shuffle(idx_k)
-            proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
-            proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
-            proportions = proportions / proportions.sum()
-            proportions = (np.cumsum(proportions) * N).astype(int)[:-1]
-            idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
+            while min_size < 10:
+                proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
+                proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
+                proportions = proportions / proportions.sum()
+                proportions = (np.cumsum(proportions) * N).astype(int)[:-1]
+                idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
+                min_size = min([len(idx_j) for idx_j in idx_batch])
             for j in range(n_nets):
                 np.random.shuffle(idx_batch[j]) # shuffle once more
                 net_dataidx_map[j] = idx_batch[j]
@@ -584,9 +587,8 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
     if 'NIH' in data_dir:
         class_num = 14
         indices= partition_data(data_dir, partition_method, client_number, partition_alpha)
-        train_data_global = NIHTrainDataset(0, data_dir, transform = _data_transforms_NIH(), indices=list(range(86336)))
-        test_data_global = NIHTestDataset(data_dir, transform = _data_transforms_NIH())
-        length = len(train_data_global)
+        train_data_global = torch.utils.data.DataLoader(NIHTrainDataset(0, data_dir, transform = _data_transforms_NIH(), indices=list(range(86336))), batch_size = 32, shuffle = True)
+        test_data_global = torch.utils.data.DataLoader(NIHTestDataset(data_dir, transform = _data_transforms_NIH()), batch_size = 32, shuffle = not True)
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
         # indices = distribute_indices(length, 1, client_number)
@@ -605,7 +607,6 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         indices = partition_data(data_dir, partition_method, client_number, partition_alpha)
         train_data_global = ChexpertTrainDataset(0, transform = _data_transforms_ChexPert(), indices=list(range(86336)))
         test_data_global = ChexpertTrainDataset(transform = _data_transforms_ChexPert())
-        length = len(train_data_global)
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
         # indices = distribute_indices(length, 1, client_number)
