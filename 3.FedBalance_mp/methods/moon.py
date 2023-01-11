@@ -9,6 +9,7 @@ from methods.base import Base_Client, Base_Server
 from torch.multiprocessing import current_process
 import numpy as np
 from sklearn.metrics import roc_auc_score
+import os
 
 class Client(Base_Client):
     def __init__(self, client_dict, args):
@@ -56,7 +57,7 @@ class Client(Base_Client):
             batch_loss = []
             for batch_idx, (x, target) in enumerate(self.train_dataloader):
                 # logging.info(x.shape)
-                x, target = x.to(self.device), target.to(self.device).long()
+                x= x.to(self.device)
                 self.optimizer.zero_grad()
                 #####
                 pro1, out = self.model(x)
@@ -72,13 +73,14 @@ class Client(Base_Client):
                 logits /= self.temp
                 labels = torch.zeros(x.size(0)).to(self.device).long()
 
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    loss1 = self.criterion(out, target.type(torch.FloatTensor).to(self.device))
+                else:
+                    loss1 = self.criterion(out, target.type(torch.LongTensor).to(self.device))
+
                 loss2 = self.args.mu * self.criterion(logits, labels)
 
                 # loss1 = self.criterion(out, target)
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
-                    loss1 = self.criterion(out, labels.type(torch.FloatTensor).to(self.device))
-                else:
-                    loss1 = self.criterion(out, labels.type(torch.LongTensor).to(self.device))
                 
                 loss = loss1 + loss2
                 #####
@@ -90,7 +92,7 @@ class Client(Base_Client):
                 logging.info('(client {}. Local Training Epoch: {} \tLoss: {:.6f}  Thread {}  Map {}'.format(self.client_index,
                     epoch, sum(epoch_loss) / len(epoch_loss), current_process()._identity[0], self.client_map[self.round]))
         weights = self.model.cpu().state_dict()
-        # self.prev_model.load_state_dict(weights)
+        self.prev_model.load_state_dict(weights) ##
         return weights
 
     def test(self):
@@ -134,7 +136,7 @@ class Client(Base_Client):
                 logging.info("************* Client {} AUC = {:.2f},  Acc = {:.2f}**************".format(self.client_index, auc, acc))
                 return auc
             else:
-                logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                logging.info("************* Client {} Acc = {:.2f} ***************************".format(self.client_index, acc))
                 return acc
 
 class Server(Base_Server):
@@ -154,6 +156,10 @@ class Server(Base_Server):
         for x in received_info:
             self.prev_models[x['client_index']] = x['weights']
         server_outputs = [{'global':g, 'prev':self.prev_models} for g in server_outputs]
+        acc_path = '{}/logs/{}_{}_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
+        f = open(acc_path, 'a')
+        f.write(str(acc) + '\n')
+        f.close()
         return server_outputs
 
     def start(self):
