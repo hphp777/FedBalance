@@ -8,12 +8,16 @@ from torch.multiprocessing import current_process
 
 class PNB_loss():
 
-    def __init__(self, dataset, pos_preq, neg_freq):
+    def __init__(self, dataset, pos_freq, neg_freq):
         self.beta = 0.9999
         self.alpha = 1
         self.dataset = dataset
-        self.pos_weights = self.get_inverse_effective_number(self.beta, pos_preq)
-        self.neg_weights = self.get_inverse_effective_number(self.beta, neg_freq)
+        self.pos_freq = np.array(pos_freq)
+        self.neg_freq = np.array(neg_freq)
+        self.pos_weights = self.get_inverse_effective_number(self.beta, self.pos_freq)
+        self.neg_weights = self.get_inverse_effective_number(self.beta, self.neg_freq)
+        # print("pos effective num : ", self.pos_weights)
+        # print("neg effective num : ", self.neg_weights)
         
         #temp
         self.total = self.pos_weights + self.neg_weights
@@ -21,9 +25,13 @@ class PNB_loss():
         self.neg_weights = self.neg_weights / self.total
 
     def get_inverse_effective_number(self, beta, freq): # beta is same for all classes
-        sons = freq / self.alpha # scaling factor
-        for i in range(len(freq)):
-            sons[i] = math.pow(beta,freq[i])
+        sons = np.array(freq) / self.alpha # scaling factor
+        for c in range(len(freq)):
+            # print("Client",c," number: ", freq[c])
+            for i in range(len(freq[0])):
+                if freq[c][i] == 0:
+                    freq[c][i] = 1
+                sons[c][i] = math.pow(beta,freq[c][i])
         sons = np.array(sons)
         En = (1 - sons) / (1 - beta)
         return (1 / En) # the form of vector
@@ -45,7 +53,7 @@ class PNB_loss():
         sigmoid = nn.Sigmoid()
         
         if self.dataset == 'NIH' or self.dataset == 'ChexPert':
-            for i in range(len(y_true)):
+            for i in range(len(self.pos_weights[0])): # This length should be the class
                 # for each class, add average weighted loss for that class 
                 loss_pos =  -1 * torch.mean(self.pos_weights[client_idx][i] * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
                 loss_neg =  -1 * torch.mean(self.neg_weights[client_idx][i] * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
@@ -53,7 +61,8 @@ class PNB_loss():
                 # loss = (1 / self.neg_weights[i]) * loss * 0.05
         else : 
             for i in range(len(y_true)):
-                loss_pos =  -1 * torch.mean(self.pos_weights[client_idx][i] * y_true[:, i] * torch.log(y_pred[:, i] + epsilon))
+                loss_pos =  -1 * (y_true[i] * torch.log(y_pred[i][y_true[i]] + epsilon))
+                loss += self.pos_weights[client_idx][y_true[i]] * loss_pos
         return loss
 
 
@@ -67,7 +76,7 @@ class Client(Base_Client):
         self.client_pos_freq = client_dict['clients_pos']
         self.client_neg_freq = client_dict['clients_neg']
         
-        self.criterion = PNB_loss(self.args.dataset, self.client_pos_freq, self.client_neg_freq).to(self.device)
+        self.criterion = PNB_loss(self.args.dataset, self.client_pos_freq, self.client_neg_freq)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.lr, momentum=0.9, weight_decay=self.args.wd, nesterov=True)
 
     def run(self, received_info): # thread의 갯수 만큼 실행됨
@@ -109,7 +118,7 @@ class Client(Base_Client):
                     loss = self.criterion(client_idx, out, labels.type(torch.FloatTensor).to(self.device))
                 else:
                     log_probs = self.model(images)
-                    loss = self.criterion(client_idx, torch.log_softmax(log_probs), labels.type(torch.LongTensor).to(self.device)) ####
+                    loss = self.criterion(client_idx, torch.softmax(log_probs, dim=1), labels.type(torch.LongTensor).to(self.device)) ####
                 
                 loss.backward()
                 self.optimizer.step()

@@ -21,6 +21,7 @@ import methods.fedavg as fedavg
 import methods.fedprox as fedprox
 import methods.moon as moon
 import methods.fedalign as fedalign
+import methods.fedbalance as fedbalance
 import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
@@ -193,9 +194,9 @@ if __name__ == "__main__":
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
                             'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir} for i in range(args.thread_number)]
     elif args.method=='fedbalance':
-        Server = fedalign.Server
-        Client = fedalign.Client
-        Model = resnet56_fedalign 
+        Server = fedbalance.Server
+        Client = fedbalance.Client
+        Model = resnet56
         width_range = [args.width, 1.0]
         resolutions = [32] if 'cifar' in args.data_dir else [224]
         server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'imbalances': client_imbalances}
