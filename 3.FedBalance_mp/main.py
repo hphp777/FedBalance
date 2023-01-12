@@ -25,8 +25,8 @@ import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='moon', metavar='N',
-                        help='Options are: fedavg, fedprox, moon, fedalign')
+    parser.add_argument('--method', type=str, default='fedbalance', metavar='N',
+                        help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
 
     parser.add_argument('--data_dir', type=str, default="data/cifar10",
                         help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", ChexPert')
@@ -60,7 +60,7 @@ def add_args(parser):
     parser.add_argument('--pretrained', action='store_true', default=False,  
                         help='test pretrained model')
 
-    parser.add_argument('--mu', type=float, default=1.0, metavar='MU',
+    parser.add_argument('--mu', type=float, default=0.45, metavar='MU',
                         help='mu value for various methods')
 
     parser.add_argument('--width', type=float, default=0.25, metavar='WI',
@@ -149,7 +149,7 @@ if __name__ == "__main__":
  
     ###################################### get data
     train_data_num, test_data_num, train_data_global, test_data_global, data_local_num_dict, train_data_local_dict, test_data_local_dict,\
-         class_num = dl.load_partition_data(args.data_dir, args.partition_method, args.partition_alpha, args.client_number, args.batch_size)
+         class_num, client_pos_freq, client_neg_freq, client_imbalances = dl.load_partition_data(args.data_dir, args.partition_method, args.partition_alpha, args.client_number, args.batch_size)
     # train_data_num = 50000
     # test_data_num = 312
     # train_data_global, test_data_global = global train, test dataloader
@@ -192,6 +192,17 @@ if __name__ == "__main__":
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
                             'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir} for i in range(args.thread_number)]
+    elif args.method=='fedbalance':
+        Server = fedalign.Server
+        Client = fedalign.Client
+        Model = resnet56_fedalign 
+        width_range = [args.width, 1.0]
+        resolutions = [32] if 'cifar' in args.data_dir else [224]
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'imbalances': client_imbalances}
+        client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
+                            'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir,
+                            'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
     else:
         raise ValueError('Invalid --method chosen! Please choose from availible methods.')
     

@@ -492,6 +492,11 @@ def partition_data(datadir, partition, n_nets, alpha):
         net_dataidx_map = {}
         min_size = 0
         idx_batch = [[] for _ in range(n_nets)] # n_nuts : the number of clients
+        client_pos_proportions = []
+        client_pos_freq = []
+        client_neg_proportions = []
+        client_neg_freq = []
+        client_imbalances = []
         # [[], [], [], [], [], [], [], [], [], []] # the number of clients
         # for each class in the dataset
         if 'NIH' in datadir or 'ChexPert' in datadir:
@@ -502,13 +507,38 @@ def partition_data(datadir, partition, n_nets, alpha):
                 proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
                 proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
                 proportions = proportions / proportions.sum()
+
+                client_pos_proportions.append(proportions)
+                client_pos_freq.append((proportions * len(idx_k)).astype(int))
+                client_neg_proportions.append(1 - proportions)
+                client_neg_freq.append(((1 - proportions) * len(idx_k)).astype(int))
+                
                 proportions = (np.cumsum(proportions) * N).astype(int)[:-1]
                 idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
                 min_size = min([len(idx_j) for idx_j in idx_batch])
+            
+            # Get clients' degree of data imbalances.
+            for i in range(n_nets):
+                difference_cnt = client_pos_freq[i] - client_pos_freq[i].mean()
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = difference_cnt[i] * difference_cnt[i]        
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = difference_cnt[i] / difference_cnt.sum()
+                # Calculate the level of imbalnce
+                difference_cnt -= difference_cnt.mean()
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
+                client_imbalances.append(1 / difference_cnt.sum())
+
+            client_imbalances = np.array(client_imbalances)
+            client_imbalances =  client_imbalances / client_imbalances.sum()
+            
             for j in range(n_nets):
                 np.random.shuffle(idx_batch[j]) # shuffle once more
                 net_dataidx_map[j] = idx_batch[j]
-            return net_dataidx_map
+                
+            return net_dataidx_map, client_pos_freq, client_neg_freq, client_imbalances
+        
         else:
             y_train, y_test = load_data(datadir)
             n_train = y_train.shape[0]
@@ -530,6 +560,12 @@ def partition_data(datadir, partition, n_nets, alpha):
                     # idx_j is []
                     # (len(idx_j) < N / n_nets) is True
                     proportions = proportions / proportions.sum()
+
+                    client_pos_proportions.append(proportions)
+                    client_pos_freq.append((proportions * len(idx_k)).astype(int))
+                    client_neg_proportions.append(1 - proportions)
+                    client_neg_freq.append(((1 - proportions) * len(idx_k)).astype(int))
+
                     # Same as above
                     proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
                     # cumsum : cumulative summation
@@ -543,6 +579,22 @@ def partition_data(datadir, partition, n_nets, alpha):
                     min_size = min([len(idx_j) for idx_j in idx_batch])
                     # the smallest data should be greater than 9
 
+            # Get clients' degree of data imbalances.
+            for i in range(n_nets):
+                difference_cnt = client_pos_freq[i] - client_pos_freq[i].mean()
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = difference_cnt[i] * difference_cnt[i]        
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = difference_cnt[i] / difference_cnt.sum()
+                # Calculate the level of imbalnce
+                difference_cnt -= difference_cnt.mean()
+                for i in range(len(difference_cnt)):
+                    difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
+                client_imbalances.append(1 / difference_cnt.sum())
+
+            client_imbalances = np.array(client_imbalances)
+            client_imbalances =  client_imbalances / client_imbalances.sum()
+
             for j in range(n_nets):
                 np.random.shuffle(idx_batch[j]) # shuffle once more
                 net_dataidx_map[j] = idx_batch[j]
@@ -550,7 +602,7 @@ def partition_data(datadir, partition, n_nets, alpha):
             traindata_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
 
             # the number of class, shuffled indices, record of it
-            return class_num, net_dataidx_map, traindata_cls_counts
+            return class_num, net_dataidx_map, traindata_cls_counts, client_pos_freq, client_neg_freq, client_imbalances
 
 # for centralized training
 def get_dataloader(datadir, train_bs, test_bs, dataidxs=None):
@@ -586,7 +638,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
     
     if 'NIH' in data_dir:
         class_num = 14
-        indices= partition_data(data_dir, partition_method, client_number, partition_alpha)
+        indices, client_pos_freq, client_neg_freq, client_imbalances= partition_data(data_dir, partition_method, client_number, partition_alpha)
         train_data_global = torch.utils.data.DataLoader(NIHTrainDataset(0, data_dir, transform = _data_transforms_NIH(), indices=list(range(86336))), batch_size = 32, shuffle = True)
         test_data_global = torch.utils.data.DataLoader(NIHTestDataset(data_dir, transform = _data_transforms_NIH()), batch_size = 32, shuffle = not True)
         train_data_num = len(train_data_global)
@@ -604,7 +656,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
 
     elif 'ChexPert' in data_dir:
         class_num = 10
-        indices = partition_data(data_dir, partition_method, client_number, partition_alpha)
+        indices, client_pos_freq, client_neg_freq, client_imbalances = partition_data(data_dir, partition_method, client_number, partition_alpha)
         train_data_global = ChexpertTrainDataset(0, transform = _data_transforms_ChexPert(), indices=list(range(86336)))
         test_data_global = ChexpertTrainDataset(transform = _data_transforms_ChexPert())
         train_data_num = len(train_data_global)
@@ -622,7 +674,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
 
     elif ('cifar10' in data_dir) or ('cifar100' in data_dir):
         
-        class_num, net_dataidx_map, traindata_cls_counts = partition_data(data_dir, partition_method, client_number, partition_alpha)
+        class_num, net_dataidx_map, traindata_cls_counts, client_pos_freq, client_neg_freq, client_imbalances = partition_data(data_dir, partition_method, client_number, partition_alpha)
         logging.info("traindata_cls_counts = " + str(traindata_cls_counts)) # report the data
         train_data_num = sum([len(net_dataidx_map[r]) for r in range(client_number)]) # overall number of data
         
@@ -645,8 +697,9 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
                 client_idx, len(train_data_local), len(test_data_local)))
             train_data_local_dict[client_idx] = train_data_local # client_number : dataloader
             test_data_local_dict[client_idx] = test_data_local
+
     else :
         raise ValueError("Wrong data path!")
-        
+
     return train_data_num, test_data_num, train_data_global, test_data_global, \
-           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num, client_pos_freq, client_neg_freq, client_imbalances
