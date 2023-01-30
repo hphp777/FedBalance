@@ -7,7 +7,7 @@ class Client(Base_Client):
     def __init__(self, client_dict, args):
         super().__init__(client_dict, args)
         self.model = self.model_type(self.num_classes).to(self.device)
-        if 'NIH' in self.dir or 'ChexPert' in self.dir:
+        if 'NIH' in self.dir or 'CheXpert' in self.dir:
             self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
         else:
             self.criterion = torch.nn.CrossEntropyLoss().to(self.device)

@@ -151,6 +151,8 @@ if __name__ == "__main__":
     ###################################### get data
     train_data_num, test_data_num, train_data_global, test_data_global, data_local_num_dict, train_data_local_dict, test_data_local_dict,\
          class_num, client_pos_freq, client_neg_freq, client_imbalances = dl.load_partition_data(args.data_dir, args.partition_method, args.partition_alpha, args.client_number, args.batch_size)
+    print(len(test_data_global))
+    
     # train_data_num = 50000
     # test_data_num = 312
     # train_data_global, test_data_global = global train, test dataloader

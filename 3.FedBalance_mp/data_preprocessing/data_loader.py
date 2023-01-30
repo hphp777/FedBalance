@@ -672,8 +672,8 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         client_pos_freq = []
         client_neg_freq = []
         indices = partition_data(data_dir, partition_method, client_number, partition_alpha)
-        train_data_global = ChexpertTrainDataset(0, transform = _data_transforms_ChexPert(), indices=list(range(86336)))
-        test_data_global = ChexpertTestDataset(transform = _data_transforms_ChexPert())
+        train_data_global = torch.utils.data.DataLoader(ChexpertTrainDataset(0, transform = _data_transforms_ChexPert(), indices=list(range(86336))), batch_size = 32, shuffle = True)
+        test_data_global =  torch.utils.data.DataLoader(ChexpertTestDataset(transform = _data_transforms_ChexPert()), batch_size = 32, shuffle = not True)
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
         # indices = distribute_indices(length, 1, client_number)
