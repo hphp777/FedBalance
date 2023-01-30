@@ -17,6 +17,7 @@ import models.ComputePostBN as pbn
 from torch.multiprocessing import current_process
 import numpy as np
 import random
+from sklearn.metrics import roc_auc_score
 
 class Client(Base_Client):
     def __init__(self, client_dict, args):
@@ -42,7 +43,13 @@ class Client(Base_Client):
                
                 self.model.apply(lambda m: setattr(m, 'width_mult', self.width_range[-1]))
                 t_feats, t_out = self.model.extract_feature(images)
-                loss = self.criterion(t_out, labels)
+
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    loss = self.criterion(t_out, labels.type(torch.FloatTensor).to(self.device))
+                else:
+                    loss = self.criterion(t_out, labels.type(torch.LongTensor).to(self.device))
+
+                # loss = self.criterion(t_out, labels)
                 loss.backward()
                 loss_CE = loss.item()
                 self.model.apply(lambda m: setattr(m, 'width_mult', self.width_range[0]))
@@ -88,29 +95,49 @@ class Client(Base_Client):
         self.model.to(self.device)
         self.model.eval()
         test_correct = 0.0
-        test_loss = 0.0
         test_sample_number = 0.0
+        sigmoid = torch.nn.Sigmoid()
+        val_loader_examples_num = len(self.test_dataloader.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
         with torch.no_grad():
             ###
             self.model.apply(lambda m: setattr(m, 'width_mult', self.width_range[-1]))
             self.model = pbn.ComputeBN(self.model, self.train_dataloader, self.resolutions[0], self.device)
             ###
-            for batch_idx, (x, target) in enumerate(self.train_dataloader):
+            for batch_idx, (x, target) in enumerate(self.test_dataloader):
                 target = target.type(torch.LongTensor)
                 x = x.to(self.device)
                 target = target.to(self.device)
 
-                pred = self.model(x)
-                # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
+                out = self.model(x)
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
+                else:
+                    _, predicted = torch.max(out, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
+                    test_sample_number += target.size(0)
 
-                test_correct += correct.item()
-                # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
-        return acc
+
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                try:
+                    auc = roc_auc_score(gt, probs)
+                except:
+                    auc = 0
+                logging.info("************* Client {} AUC = {:.2f},  Acc = {:.2f}**************".format(self.client_index, auc, acc))
+                return auc
+            else:
+                logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                return acc
 
 class Server(Base_Server):
     def __init__(self,server_dict, args):
@@ -124,6 +151,11 @@ class Server(Base_Server):
         test_correct = 0.0
         test_loss = 0.0
         test_sample_number = 0.0
+        sigmoid = torch.nn.Sigmoid()
+        val_loader_examples_num = len(self.test_data.dataset)
+        probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
+        k=0
         with torch.no_grad():
             ###
             self.model.apply(lambda m: setattr(m, 'width_mult', 1.0))
@@ -133,14 +165,26 @@ class Server(Base_Server):
                 x = x.to(self.device)
                 target = target.to(self.device)
 
-                pred = self.model(x)
-                # loss = self.criterion(pred, target)
-                _, predicted = torch.max(pred, 1)
-                correct = predicted.eq(target).sum()
+                out = self.model(x)
+                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                    probs[k: k + out.shape[0], :] = out.cpu()
+                    gt[   k: k + out.shape[0], :] = target.cpu()
+                    k += out.shape[0] 
+                    preds = np.round(sigmoid(out).cpu().detach().numpy())
+                    targets = target.cpu().detach().numpy()
+                    test_sample_number += len(targets)*self.num_classes
+                    test_correct += (preds == targets).sum()
+                else:
+                    _, predicted = torch.max(out, 1)
+                    correct = predicted.eq(target).sum()
+                    test_correct += correct.item()
+                    test_sample_number += target.size(0)
 
-                test_correct += correct.item()
-                # test_loss += loss.item() * target.size(0)
-                test_sample_number += target.size(0)
             acc = (test_correct / test_sample_number)*100
-            logging.info("************* Server Acc = {:.2f} **************".format(acc))
-        return acc
+            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+                auc = roc_auc_score(gt, probs)
+                logging.info("***** Server AUC = {:.4f} ,Acc = {:.4f} *********************************************************************".format(auc, acc))
+                return auc
+            else:
+                logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
+                return acc

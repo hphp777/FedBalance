@@ -34,6 +34,7 @@ class PNB_loss():
                 sons[c][i] = math.pow(beta,freq[c][i])
         sons = np.array(sons)
         En = (1 - sons) / (1 - beta)
+        En[np.isnan(En)] = En.max()
         return (1 / En) # the form of vector
 
     def __call__(self, client_idx, y_pred, y_true, epsilon=1e-7):
@@ -55,8 +56,8 @@ class PNB_loss():
         if self.dataset == 'NIH' or self.dataset == 'ChexPert':
             for i in range(len(self.pos_weights[0])): # This length should be the class
                 # for each class, add average weighted loss for that class 
-                loss_pos =  -1 * torch.mean(self.pos_weights[client_idx][i] * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
-                loss_neg =  -1 * torch.mean(self.neg_weights[client_idx][i] * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
+                loss_pos =  -1 * torch.mean(torch.Tensor(self.pos_weights[client_idx][i]) * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
+                loss_neg =  -1 * torch.mean(torch.Tensor(self.neg_weights[client_idx][i]) * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
                 loss += self.pos_weights[i] * (loss_pos + loss_neg)
                 # loss = (1 / self.neg_weights[i]) * loss * 0.05
         else : 
@@ -66,6 +67,60 @@ class PNB_loss():
             loss /= len(y_true)
         return loss
 
+class CB_loss():
+
+    def __init__(self, dataset, pos_freq, no_of_classes):
+        self.beta = 0.9999
+        self.alpha = 1
+        self.dataset = dataset
+        self.pos_freq = np.array(pos_freq)
+
+        self.pos_weights = self.get_inverse_effective_number(self.beta, self.pos_freq)
+        self.pos_weights = self.pos_weights / np.sum(self.pos_weights)
+        self.pos_weights = self.pos_weights * no_of_classes
+
+    def get_inverse_effective_number(self, beta, freq): # beta is same for all classes
+        sons = np.array(freq) / self.alpha # scaling factor
+        for c in range(len(freq)):
+            # print("Client",c," number: ", freq[c])
+            for i in range(len(freq[0])):
+                if freq[c][i] == 0:
+                    freq[c][i] = 1
+                sons[c][i] = math.pow(beta,sons[c][i])
+        sons = np.array(sons)
+        En = (1 - sons) / (1 - beta)
+        En[np.isnan(En)] = En.max()
+        return (1 / En) # the form of vector
+
+    def __call__(self, client_idx, y_pred, y_true, epsilon=1e-7):
+        """
+        Return weighted loss value. 
+
+        Args:
+            y_true (Tensor): Tensor of true labels, size is (num_examples, num_classes)
+            y_pred (Tensor): Tensor of predicted labels, size is (num_examples, num_classes)
+            pos_weights : (client_num, batch_size, num_classes)
+            neg_weights : (client_num, batch_size, num_classes)
+        Returns:
+            loss (Float): overall scalar loss summed across all classes
+        """
+        # initialize loss to zero
+        loss = 0.0
+        sigmoid = nn.Sigmoid()
+        
+        if self.dataset == 'NIH' or self.dataset == 'ChexPert':
+            for i in range(len(self.pos_weights[0])): # This length should be the class
+                # for each class, add average weighted loss for that class 
+                loss_pos =  -1 * torch.mean(y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
+                loss_neg =  -1 * torch.mean((1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
+                loss += self.pos_weights[i] * (loss_pos + loss_neg)
+                # loss = (1 / self.neg_weights[i]) * loss * 0.05
+        else : 
+            for i in range(len(y_true)):
+                loss_pos =  -1 * (torch.log(y_pred[i][y_true[i]] + epsilon))
+                loss += self.pos_weights[client_idx][y_true[i]] * loss_pos
+            loss /= len(y_true)
+        return loss
 
 class Client(Base_Client):
     # super의 init을 한번 실행하고 아래 코드도 실행

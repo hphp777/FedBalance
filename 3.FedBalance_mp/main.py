@@ -26,14 +26,14 @@ import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='fedbalance', metavar='N',
+    parser.add_argument('--method', type=str, default='fedavg', metavar='N',
                         help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
 
-    parser.add_argument('--data_dir', type=str, default="data/cifar10",
-                        help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", ChexPert')
+    parser.add_argument('--data_dir', type=str, default="C:/Users/hb/Desktop/data/CheXpert-v1.0-small",
+                        help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", C:/Users/hb/Desktop/data/CheXpert-v1.0-small')
 
-    parser.add_argument('--dataset', type=str, default="cifar10",
-                        help='data directory: cifar100, cifar10, "NIH", ChexPert')
+    parser.add_argument('--dataset', type=str, default="NIH",
+                        help='data directory: cifar100, cifar10, NIH, ChexPert')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')
@@ -41,7 +41,7 @@ def add_args(parser):
     parser.add_argument('--partition_alpha', type=float, default=0.5, metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
-    parser.add_argument('--client_number', type=int, default=10, metavar='NN',
+    parser.add_argument('--client_number', type=int, default=5, metavar='NN',
                         help='number of clients in the FL system')
 
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
@@ -52,16 +52,16 @@ def add_args(parser):
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.0001)
 
-    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=2, metavar='EP',
                         help='how many epochs will be trained locally per round')
 
-    parser.add_argument('--comm_round', type=int, default=31,
+    parser.add_argument('--comm_round', type=int, default=50,
                         help='how many rounds of communications are conducted')
 
     parser.add_argument('--pretrained', action='store_true', default=False,  
                         help='test pretrained model')
 
-    parser.add_argument('--mu', type=float, default=0.45, metavar='MU',
+    parser.add_argument('--mu', type=float, default=0.0001, metavar='MU',
                         help='mu value for various methods')
 
     parser.add_argument('--width', type=float, default=0.25, metavar='WI',
@@ -76,7 +76,7 @@ def add_args(parser):
     parser.add_argument('--save_client', action='store_true', default=False,
                         help='Save client checkpoints each round')
 
-    parser.add_argument('--thread_number', type=int, default=5, metavar='NN',
+    parser.add_argument('--thread_number', type=int, default=1, metavar='NN',
                         help='number of parallel training threads')
 
     parser.add_argument('--client_sample', type=float, default=1.0, metavar='MT',

@@ -251,7 +251,8 @@ class NIHTestDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.test_df.iloc[index, :]
-        img = cv2.imread(row['image_links'])
+        # img = cv2.imread(row['image_links'])
+        img = Image.open(row['image_links'])
         labels = str.split(row['Finding Labels'], '|')
         target = torch.zeros(len(self.all_classes)) # 15
         for lab in labels:
@@ -453,7 +454,9 @@ def _data_transforms_imagenet(datadir):
 def _data_transforms_NIH():
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([transforms.ToTensor(),
+    transform = transforms.Compose([
+                                    transforms.Resize([150,150]),
+                                    transforms.ToTensor(),
                                     normalize])
     return transform
 
@@ -507,37 +510,32 @@ def partition_data(datadir, partition, n_nets, alpha):
                 proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
                 proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
                 proportions = proportions / proportions.sum()
-
-                client_pos_proportions.append(proportions)
-                client_pos_freq.append((proportions * len(idx_k)).astype(int))
-                client_neg_proportions.append(1 - proportions)
-                client_neg_freq.append(((1 - proportions) * len(idx_k)).astype(int))
                 
                 proportions = (np.cumsum(proportions) * N).astype(int)[:-1]
                 idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
                 min_size = min([len(idx_j) for idx_j in idx_batch])
             
             # Get clients' degree of data imbalances.
-            for i in range(n_nets):
-                difference_cnt = client_pos_freq[i] - client_pos_freq[i].mean()
-                for i in range(len(difference_cnt)):
-                    difference_cnt[i] = difference_cnt[i] * difference_cnt[i]        
-                for i in range(len(difference_cnt)):
-                    difference_cnt[i] = difference_cnt[i] / difference_cnt.sum()
-                # Calculate the level of imbalnce
-                difference_cnt -= difference_cnt.mean()
-                for i in range(len(difference_cnt)):
-                    difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
-                client_imbalances.append(1 / difference_cnt.sum())
+            # for i in range(n_nets):
+            #     difference_cnt = client_pos_freq[i] - client_pos_freq[i].mean()
+            #     for i in range(len(difference_cnt)):
+            #         difference_cnt[i] = difference_cnt[i] * difference_cnt[i]        
+            #     for i in range(len(difference_cnt)):
+            #         difference_cnt[i] = difference_cnt[i] / difference_cnt.sum()
+            #     # Calculate the level of imbalnce
+            #     difference_cnt -= difference_cnt.mean()
+            #     for i in range(len(difference_cnt)):
+            #         difference_cnt[i] = (difference_cnt[i] * difference_cnt[i])
+            #     client_imbalances.append(1 / difference_cnt.sum())
 
-            client_imbalances = np.array(client_imbalances)
-            client_imbalances =  client_imbalances / client_imbalances.sum()
+            # client_imbalances = np.array(client_imbalances)
+            # client_imbalances =  client_imbalances / client_imbalances.sum()
             
             for j in range(n_nets):
                 np.random.shuffle(idx_batch[j]) # shuffle once more
                 net_dataidx_map[j] = idx_batch[j]
                 
-            return net_dataidx_map, client_pos_freq, client_neg_freq, client_imbalances
+            return net_dataidx_map
         
         else:
             y_train, y_test = load_data(datadir)
@@ -638,7 +636,10 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
     
     if 'NIH' in data_dir:
         class_num = 14
-        indices, client_pos_freq, client_neg_freq, client_imbalances= partition_data(data_dir, partition_method, client_number, partition_alpha)
+        client_imbalances = []
+        client_pos_freq = []
+        client_neg_freq = []
+        indices = partition_data(data_dir, partition_method, client_number, partition_alpha)
         train_data_global = torch.utils.data.DataLoader(NIHTrainDataset(0, data_dir, transform = _data_transforms_NIH(), indices=list(range(86336))), batch_size = 32, shuffle = True)
         test_data_global = torch.utils.data.DataLoader(NIHTestDataset(data_dir, transform = _data_transforms_NIH()), batch_size = 32, shuffle = not True)
         train_data_num = len(train_data_global)
@@ -646,7 +647,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
             data = NIHTrainDataset(i, data_dir, transform = _data_transforms_NIH(), indices=indices[i])
-            data_imbalances.append(data.imbalance)
+            client_imbalances.append(data.imbalance)
             train_percentage = 0.8
             train_dataset, val_dataset = torch.utils.data.random_split(data, [int(len(data)*train_percentage), len(data)-int(len(data)*train_percentage)])
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = 32, shuffle = True)
@@ -656,15 +657,21 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
 
     elif 'ChexPert' in data_dir:
         class_num = 10
-        indices, client_pos_freq, client_neg_freq, client_imbalances = partition_data(data_dir, partition_method, client_number, partition_alpha)
+        client_imbalances = []
+        client_pos_freq = []
+        client_neg_freq = []
+        indices = partition_data(data_dir, partition_method, client_number, partition_alpha)
         train_data_global = ChexpertTrainDataset(0, transform = _data_transforms_ChexPert(), indices=list(range(86336)))
-        test_data_global = ChexpertTrainDataset(transform = _data_transforms_ChexPert())
+        test_data_global = ChexpertTestDataset(transform = _data_transforms_ChexPert())
         train_data_num = len(train_data_global)
         test_data_num = len(test_data_global)
         # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
             train_data_local_dict[i] = ChexpertTrainDataset(i, transform = _data_transforms_NIH(), indices=indices[i])
-            data_imbalances.append(data.imbalance)
+            client_imbalances.append(data.imbalance)
+            total_ds_cnt = np.array(data.total_ds_cnt)
+            client_pos_freq.append(total_ds_cnt.tolist())
+            client_neg_freq.append((total_ds_cnt.sum() - total_ds_cnt).tolist())
             train_percentage = 0.8
             train_dataset, val_dataset = torch.utils.data.random_split(data, [int(len(data)*train_percentage), len(data)-int(len(data)*train_percentage)])
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = 32, shuffle = True)

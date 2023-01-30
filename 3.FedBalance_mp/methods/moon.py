@@ -19,9 +19,11 @@ class Client(Base_Client):
         # self.prev_model.load_state_dict(self.model.state_dict())
         self.global_model = self.model_type(self.num_classes, KD=True, projection=True)
         if 'NIH' in self.dir or 'ChexPert' in self.dir:
-            self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
+            self.criterion1 = torch.nn.BCEWithLogitsLoss().to(self.device)
+            self.criterion2 = torch.nn.CrossEntropyLoss().to(self.device)
         else:
-            self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
+            self.criterion1 = torch.nn.CrossEntropyLoss().to(self.device)
+            self.criterion2 = torch.nn.CrossEntropyLoss().to(self.device)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.lr, momentum=0.9, weight_decay=self.args.wd, nesterov=True)
         self.cos = torch.nn.CosineSimilarity(dim=-1)
         self.temp = 0.5
@@ -74,11 +76,11 @@ class Client(Base_Client):
                 labels = torch.zeros(x.size(0)).to(self.device).long()
 
                 if 'NIH' in self.dir or 'ChexPert' in self.dir:
-                    loss1 = self.criterion(out, target.type(torch.FloatTensor).to(self.device))
+                    loss1 = self.criterion1(out, target.type(torch.FloatTensor).to(self.device))
                 else:
-                    loss1 = self.criterion(out, target.type(torch.LongTensor).to(self.device))
+                    loss1 = self.criterion1(out, target.type(torch.LongTensor).to(self.device))
 
-                loss2 = self.args.mu * self.criterion(logits, labels)
+                loss2 = self.args.mu * self.criterion2(logits, labels)
 
                 # loss1 = self.criterion(out, target)
                 
