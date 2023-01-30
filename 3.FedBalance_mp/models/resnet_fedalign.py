@@ -114,6 +114,7 @@ class ResNet(nn.Module):
         self.max_width = max_width
         self.inplanes = 16
         self.dilation = 1
+        self.channel = 1
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
@@ -124,7 +125,7 @@ class ResNet(nn.Module):
 
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = USConv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1,
+        self.conv1 = USConv2d(self.channel, self.inplanes, kernel_size=3, stride=1, padding=1,
                                bias=False, us=[False, True], width_max=self.max_width)
         self.bn1 = USBatchNorm2d(self.inplanes, width_max=self.max_width)
         self.relu = nn.ReLU(inplace=True)

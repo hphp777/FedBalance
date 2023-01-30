@@ -75,7 +75,7 @@ class Client(Base_Client):
                 logits /= self.temp
                 labels = torch.zeros(x.size(0)).to(self.device).long()
 
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                if 'NIH' in self.dir or 'CheXpert' in self.dir:
                     loss1 = self.criterion1(out, target.type(torch.FloatTensor).to(self.device))
                 else:
                     loss1 = self.criterion1(out, target.type(torch.LongTensor).to(self.device))
@@ -115,7 +115,7 @@ class Client(Base_Client):
                 target = target.to(self.device)
 
                 _, out = self.model(x)
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                if 'NIH' in self.dir or 'CheXpert' in self.dir:
                     probs[k: k + out.shape[0], :] = out.cpu()
                     gt[   k: k + out.shape[0], :] = target.cpu()
                     k += out.shape[0] 
@@ -130,7 +130,7 @@ class Client(Base_Client):
                     test_sample_number += target.size(0)
 
             acc = (test_correct / test_sample_number)*100
-            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+            if self.args.dataset == 'NIH' or self.args.dataset == 'CheXpert':
                 try:
                     auc = roc_auc_score(gt, probs)
                 except:
@@ -186,7 +186,7 @@ class Server(Base_Server):
                 target = target.to(self.device)
                 _, out = self.model(x)
 
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                if 'NIH' in self.dir or 'CheXpert' in self.dir:
                     probs[k: k + out.shape[0], :] = out.cpu()
                     gt[   k: k + out.shape[0], :] = target.cpu()
                     k += out.shape[0] 
@@ -202,7 +202,7 @@ class Server(Base_Server):
                     test_sample_number += target.size(0)
 
             acc = (test_correct / test_sample_number)*100
-            if self.args.dataset == 'NIH' or self.args.dataset == 'ChexPert':
+            if self.args.dataset == 'NIH' or self.args.dataset == 'CheXpert':
                 auc = roc_auc_score(gt, probs)
                 logging.info("***** Server AUC = {:.4f} ,Acc = {:.4f} *********************************************************************".format(auc, acc))
                 return auc

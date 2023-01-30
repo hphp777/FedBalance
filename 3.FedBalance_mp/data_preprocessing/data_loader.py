@@ -307,7 +307,8 @@ class ChexpertTrainDataset(Dataset):
         self.class_num = 10
         self.all_classes = ['Enlarged Cardiomediastinum', 'Cardiomegaly', 'Lung Opacity', 'Lung Lesion', 'Edema', 'Consolidation', 'Pneumonia', 'Atelectasis', 'Pneumothorax', 'Fracture']
         
-        self.total_ds_cnt = np.array(self.disease_cnt)
+        self.total_ds_cnt = self.get_total_cnt()
+        self.total_ds_cnt = np.array(self.total_ds_cnt)
         # Normalize the imbalance
         self.imbalance = 0
         difference_cnt = self.total_ds_cnt - self.total_ds_cnt.mean()
@@ -345,7 +346,15 @@ class ChexpertTrainDataset(Dataset):
     def __len__(self):
         return len(self.selecte_data)
 
-    def get_ds_cnt(self, c_num):
+    def get_total_cnt(self):
+        total_ds_cnt = [0] * self.class_num
+        for i in range(len(self.selecte_data)):
+            row = self.selecte_data.iloc[i, 2:]
+            for j in range(len(row)):
+                total_ds_cnt[j] += int(row[j])
+        return total_ds_cnt
+
+    def get_ds_cnt(self):
 
         raw_pos_freq = self.total_ds_cnt
         raw_neg_freq = self.total_ds_cnt.sum() - self.total_ds_cnt
@@ -353,7 +362,7 @@ class ChexpertTrainDataset(Dataset):
         return raw_pos_freq, raw_neg_freq
 
     def get_name(self):
-        return 'ChexPert'
+        return 'CheXpert'
 
     def get_class_cnt(self):
         return 10
@@ -463,7 +472,9 @@ def _data_transforms_NIH():
 def _data_transforms_ChexPert():
     normalize = transforms.Normalize(mean=[0.485],
                                  std=[0.229])
-    transform = transforms.Compose([transforms.ToTensor(),
+    transform = transforms.Compose([
+                                    transforms.Resize([150,150]),
+                                    transforms.ToTensor(),
                                     normalize])
     return transform
 
@@ -502,7 +513,7 @@ def partition_data(datadir, partition, n_nets, alpha):
         client_imbalances = []
         # [[], [], [], [], [], [], [], [], [], []] # the number of clients
         # for each class in the dataset
-        if 'NIH' in datadir or 'ChexPert' in datadir:
+        if 'NIH' in datadir or 'CheXpert' in datadir:
             N = 86336
             idx_k = np.array(list(range(N)))
             np.random.shuffle(idx_k)
@@ -655,7 +666,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
             train_data_local_dict[i] = train_loader
             test_data_local_dict[i] = val_loader
 
-    elif 'ChexPert' in data_dir:
+    elif 'CheXpert' in data_dir:
         class_num = 10
         client_imbalances = []
         client_pos_freq = []
@@ -667,7 +678,7 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         test_data_num = len(test_data_global)
         # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
-            train_data_local_dict[i] = ChexpertTrainDataset(i, transform = _data_transforms_NIH(), indices=indices[i])
+            data = ChexpertTrainDataset(i, transform = _data_transforms_ChexPert(), indices=indices[i])
             client_imbalances.append(data.imbalance)
             total_ds_cnt = np.array(data.total_ds_cnt)
             client_pos_freq.append(total_ds_cnt.tolist())

@@ -26,14 +26,14 @@ import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='fedavg', metavar='N',
+    parser.add_argument('--method', type=str, default='moon', metavar='N',
                         help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
 
     parser.add_argument('--data_dir', type=str, default="C:/Users/hb/Desktop/data/CheXpert-v1.0-small",
                         help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", C:/Users/hb/Desktop/data/CheXpert-v1.0-small')
 
-    parser.add_argument('--dataset', type=str, default="NIH",
-                        help='data directory: cifar100, cifar10, NIH, ChexPert')
+    parser.add_argument('--dataset', type=str, default="CheXpert",
+                        help='data directory: cifar100, cifar10, NIH, CheXpert')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')

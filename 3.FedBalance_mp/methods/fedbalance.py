@@ -53,7 +53,7 @@ class PNB_loss():
         loss = 0.0
         sigmoid = nn.Sigmoid()
         
-        if self.dataset == 'NIH' or self.dataset == 'ChexPert':
+        if self.dataset == 'NIH' or self.dataset == 'CheXpert':
             for i in range(len(self.pos_weights[0])): # This length should be the class
                 # for each class, add average weighted loss for that class 
                 loss_pos =  -1 * torch.mean(torch.Tensor(self.pos_weights[client_idx][i]) * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
@@ -108,7 +108,7 @@ class CB_loss():
         loss = 0.0
         sigmoid = nn.Sigmoid()
         
-        if self.dataset == 'NIH' or self.dataset == 'ChexPert':
+        if self.dataset == 'NIH' or self.dataset == 'CheXpert':
             for i in range(len(self.pos_weights[0])): # This length should be the class
                 # for each class, add average weighted loss for that class 
                 loss_pos =  -1 * torch.mean(y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
@@ -169,7 +169,7 @@ class Client(Base_Client):
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
 
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                if 'NIH' in self.dir or 'CheXpert' in self.dir:
                     out = self.model(images)  
                     loss = self.criterion(client_idx, out, labels.type(torch.FloatTensor).to(self.device))
                 else:
