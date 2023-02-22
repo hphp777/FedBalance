@@ -66,6 +66,15 @@ def distribute_indices(length, alpha):
 
     return indices
 
+def check_version(cifar_version):
+    if cifar_version not in ['10', '100', '20']:
+        raise ValueError('cifar version must be one of 10, 20, 100.')
+
+def img_num(cifar_version):
+    check_version(cifar_version)
+    dt = {'10': 5000, '100': 500, '20': 2500}
+    return dt[cifar_version]
+
 def get_img_num_per_cls(cifar_version, imb_factor=0.1):
     """
     Get a list of image numbers for each class, given cifar version

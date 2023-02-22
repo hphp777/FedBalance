@@ -41,7 +41,7 @@ def add_args(parser):
     parser.add_argument('--partition_alpha', type=float, default=1, metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
-    parser.add_argument('--client_number', type=int, default=5, metavar='NN',
+    parser.add_argument('--client_number', type=int, default=16, metavar='NN',
                         help='number of clients in the FL system')
 
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
@@ -52,10 +52,10 @@ def add_args(parser):
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.0001)
 
-    parser.add_argument('--epochs', type=int, default=2, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=20, metavar='EP',
                         help='how many epochs will be trained locally per round')
 
-    parser.add_argument('--comm_round', type=int, default=50,
+    parser.add_argument('--comm_round', type=int, default=30,
                         help='how many rounds of communications are conducted')
 
     parser.add_argument('--pretrained', action='store_true', default=False,  
@@ -76,7 +76,7 @@ def add_args(parser):
     parser.add_argument('--save_client', action='store_true', default=False,
                         help='Save client checkpoints each round')
 
-    parser.add_argument('--thread_number', type=int, default=1, metavar='NN',
+    parser.add_argument('--thread_number', type=int, default=4, metavar='NN',
                         help='number of parallel training threads')
 
     parser.add_argument('--client_sample', type=float, default=1.0, metavar='MT',
@@ -175,26 +175,29 @@ if __name__ == "__main__":
         Server = fedprox.Server
         Client = fedprox.Client
         Model = resnet56 
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony, 'imbalances': client_imbalances}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
-                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony} for i in range(args.thread_number)]
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony,
+                            'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
     elif args.method=='moon':
         Server = moon.Server
         Client = moon.Client
         Model = resnet56 
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony,'imbalances': client_imbalances}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
-                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony} for i in range(args.thread_number)]
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony,
+                            'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
     elif args.method=='fedalign':
         Server = fedalign.Server
         Client = fedalign.Client
         Model = resnet56_fedalign 
         width_range = [args.width, 1.0]
         resolutions = [32] if 'cifar' in args.data_dir else [224]
-        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony}
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'harmony': args.harmony,'imbalances': client_imbalances}
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
-                            'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir, 'harmony': args.harmony} for i in range(args.thread_number)]
+                            'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir, 'harmony': args.harmony,
+                            'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
     elif args.method=='fedbalance':
         Server = fedbalance.Server
         Client = fedbalance.Client

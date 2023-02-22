@@ -85,6 +85,8 @@ class Client(Base_Client):
         super().__init__(client_dict, args)
         self.model = self.model_type(self.num_classes).to(self.device)
         self.harmony = client_dict['harmony']
+        self.client_pos_freq = client_dict['clients_pos']
+        self.client_neg_freq = client_dict['clients_neg']
         if 'NIH' in self.dir or 'CheXpert' in self.dir:
             if self.harmony == 'n':
                 self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
@@ -139,6 +141,7 @@ class Server(Base_Server):
         super().__init__(server_dict, args)
         self.model = self.model_type(self.num_classes)
         self.harmony = server_dict['harmony']
+        self.imbalance_weights = server_dict['imbalances']
     
     def operations(self, client_info):
         client_info.sort(key=lambda tup: tup['client_index']) # 뒤죽박죽된 client_info를 client의 index 순으로 정렬 (1 ~)
