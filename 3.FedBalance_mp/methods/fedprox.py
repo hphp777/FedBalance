@@ -100,7 +100,29 @@ class Client(Base_Client):
             
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.lr, momentum=0.9, weight_decay=self.args.wd, nesterov=True)
 
-    def train(self):
+    def run(self, received_info): # thread의 갯수 만큼 실행됨
+        # recieved info : a server model weights(OrderedDict)
+        # one globally merged model's parameter
+        client_results = []
+        for client_idx in self.client_map[self.round]: # round is the index of communication round
+            # 한 tread에 할당된 client의 index가 매 round마다 들어있음.
+            self.load_client_state_dict(received_info) 
+            self.train_dataloader = self.train_data[client_idx] # among dataloader, pick one
+            self.test_dataloader = self.test_data[client_idx]
+            if self.args.client_sample < 1.0 and self.train_dataloader._iterator is not None and self.train_dataloader._iterator._shutdown:
+                self.train_dataloader._iterator = self.train_dataloader._get_iterator()
+            self.client_index = client_idx
+            num_samples = len(self.train_dataloader)*self.args.batch_size
+            weights = self.train(client_idx)
+            acc = self.test()
+            client_results.append({'weights':weights, 'num_samples':num_samples,'acc':acc, 'client_index':self.client_index})
+            if self.args.client_sample < 1.0 and self.train_dataloader._iterator is not None:
+                self.train_dataloader._iterator._shutdown_workers()
+
+        self.round += 1
+        return client_results # clients' number of weights 
+
+    def train(self, client_idx):
         # train the local model
         self.model.to(self.device)
         global_weight_collector = copy.deepcopy(list(self.model.parameters()))
@@ -113,11 +135,19 @@ class Client(Base_Client):
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
                 if 'NIH' in self.dir or 'CheXpert' in self.dir:
-                    log_probs = self.model(images)
-                    loss = self.criterion(log_probs, labels.type(torch.FloatTensor).to(self.device))
+                    if self.harmony == 'n':
+                        log_probs = self.model(images)
+                        loss = self.criterion(log_probs, labels.type(torch.FloatTensor).to(self.device))
+                    else:
+                        log_probs = self.model(images)
+                        loss = self.criterion(client_idx, log_probs, labels.type(torch.FloatTensor).to(self.device))
                 else:
-                    log_probs = self.model(images)
-                    loss = self.criterion(log_probs, labels.type(torch.LongTensor).to(self.device))
+                    if self.harmony == 'n':
+                        log_probs = self.model(images)
+                        loss = self.criterion(log_probs, labels.type(torch.LongTensor).to(self.device))
+                    else:
+                        log_probs = self.model(images)
+                        loss = self.criterion(client_idx, torch.softmax(log_probs, dim=1), labels.type(torch.LongTensor).to(self.device)) ####
                 ############
                 # for fedprox
                 fed_prox_reg = 0.0
