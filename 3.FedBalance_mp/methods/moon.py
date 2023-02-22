@@ -175,13 +175,13 @@ class Server(Base_Server):
         test_loss = 0.0
         test_sample_number = 0.0
         sigmoid = torch.nn.Sigmoid()
-        val_loader_examples_num = len(self.test_data)
+        val_loader_examples_num = len(self.test_data.dataset)
         probs = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
         gt    = np.zeros((val_loader_examples_num, self.num_classes), dtype = np.float32)
         k=0
 
         with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(self.test_data.dataset):
+            for batch_idx, (x, target) in enumerate(self.test_data):
                 x = x.to(self.device)
                 target = target.to(self.device)
                 _, out = self.model(x)

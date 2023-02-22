@@ -114,7 +114,7 @@ class ResNet(nn.Module):
         self.max_width = max_width
         self.inplanes = 16
         self.dilation = 1
-        self.channel = 1
+        self.channel = 3
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead

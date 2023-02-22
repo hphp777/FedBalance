@@ -96,7 +96,7 @@ class Base_Client():
                 target = target.to(self.device)
                 out = self.model(x)
                 
-                if 'NIH' in self.dir or 'ChexPert' in self.dir:
+                if 'NIH' in self.dir or 'CheXpert' in self.dir:
                     probs[k: k + out.shape[0], :] = out.cpu()
                     gt[   k: k + out.shape[0], :] = target.cpu()
                     k += out.shape[0] 
@@ -144,7 +144,7 @@ class Base_Server():
         if acc > self.acc:
             torch.save(self.model.state_dict(), '{}/{}.pt'.format(self.save_path, 'server'))
             self.acc = acc
-        acc_path = '{}/logs/{}_{}_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
+        acc_path = '{}/logs/{}_{}(1)_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
         f = open(acc_path, 'a')
         f.write(str(acc) + '\n')
         f.close()
@@ -215,7 +215,7 @@ class Base_Server():
             if self.args.dataset == 'NIH' or self.args.dataset == 'CheXpert':
                 auc = roc_auc_score(gt, probs)
                 logging.info("***** Server AUC = {:.4f} ,Acc = {:.4f} *********************************************************************".format(auc, acc))
-                return auc
+                return auc * 100
             else:
                 logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
                 return acc

@@ -9,20 +9,26 @@ from torch.multiprocessing import current_process
 class PNB_loss():
 
     def __init__(self, dataset, pos_freq, neg_freq):
-        self.beta = 0.9999
-        self.alpha = 1
+        self.beta = 0.9999999
+        self.alpha = 10
+        self.mu = 1.0
         self.dataset = dataset
         self.pos_freq = np.array(pos_freq)
+        print("Pos: ", self.pos_freq)
         self.neg_freq = np.array(neg_freq)
         self.pos_weights = self.get_inverse_effective_number(self.beta, self.pos_freq)
-        self.neg_weights = self.get_inverse_effective_number(self.beta, self.neg_freq)
-        # print("pos effective num : ", self.pos_weights)
-        # print("neg effective num : ", self.neg_weights)
+        self.neg_weights = self.get_inverse_effective_number(self.beta, self.neg_freq)       
         
         #temp
         self.total = self.pos_weights + self.neg_weights
-        self.pos_weights = self.pos_weights / self.total
+        self.pos_weights = (self.pos_weights / self.total)
+        self.pos_weights = np.nan_to_num(self.pos_weights)
         self.neg_weights = self.neg_weights / self.total
+
+        print("Pos weight : ", self.pos_weights)
+        print("Neg weight : ", self.neg_weights)
+
+        # print("neg effective num : ", self.neg_weights)
 
     def get_inverse_effective_number(self, beta, freq): # beta is same for all classes
         sons = np.array(freq) / self.alpha # scaling factor
@@ -31,11 +37,11 @@ class PNB_loss():
             for i in range(len(freq[0])):
                 if freq[c][i] == 0:
                     freq[c][i] = 1
-                sons[c][i] = math.pow(beta,freq[c][i])
+                sons[c][i] = math.pow(beta,sons[c][i])
         sons = np.array(sons)
-        En = (1 - sons) / (1 - beta)
+        En =  (1 - beta) / (1 - sons)
         En[np.isnan(En)] = En.max()
-        return (1 / En) # the form of vector
+        return En # the form of vector
 
     def __call__(self, client_idx, y_pred, y_true, epsilon=1e-7):
         """
@@ -56,14 +62,15 @@ class PNB_loss():
         if self.dataset == 'NIH' or self.dataset == 'CheXpert':
             for i in range(len(self.pos_weights[0])): # This length should be the class
                 # for each class, add average weighted loss for that class 
-                loss_pos =  -1 * torch.mean(torch.Tensor(self.pos_weights[client_idx][i]) * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
-                loss_neg =  -1 * torch.mean(torch.Tensor(self.neg_weights[client_idx][i]) * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
-                loss += self.pos_weights[i] * (loss_pos + loss_neg)
+                loss_pos =  -1 * torch.mean(self.pos_weights[client_idx][i] * y_true[:, i] * torch.log(sigmoid(y_pred[:, i]) + epsilon))
+                loss_neg =  -1 * torch.mean(self.neg_weights[client_idx][i] * (1 - y_true[:, i]) * torch.log(1 -sigmoid( y_pred[:, i]) + epsilon))
+                loss += self.mu * self.pos_weights[client_idx][i] * (loss_pos + loss_neg)
                 # loss = (1 / self.neg_weights[i]) * loss * 0.05
         else : 
             for i in range(len(y_true)):
                 loss_pos =  -1 * (torch.log(y_pred[i][y_true[i]] + epsilon))
                 loss += self.pos_weights[client_idx][y_true[i]] * loss_pos
+                # self.pos_weights[client_idx][y_true[i]] * 
             loss /= len(y_true)
         return loss
 
@@ -197,6 +204,11 @@ class Server(Base_Server):
         client_sd = [c['weights'] for c in client_info] # clients' number of weights
         ################################################################################################
         cw = self.imbalance_weights
+        # cw = [c['num_samples']/sum([x['num_samples'] for x in client_info]) for c in client_info]
+        # cw1 = np.array(cw1)
+        # cw2 = np.array(cw2)
+        # cw = (cw1 + cw2) / 2
+        # print("Clients weight: ", cw)
 
         ssd = self.model.state_dict()
         for key in ssd:
