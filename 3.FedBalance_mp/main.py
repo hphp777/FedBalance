@@ -26,7 +26,7 @@ import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='fedprox', metavar='N',
+    parser.add_argument('--method', type=str, default='moon', metavar='N',
                         help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
     parser.add_argument('--harmony', type=str, default='y', metavar='N')
     parser.add_argument('--data_dir', type=str, default="data/cifar100",
@@ -38,7 +38,7 @@ def add_args(parser):
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')
 
-    parser.add_argument('--partition_alpha', type=float, default=1, metavar='PA',
+    parser.add_argument('--partition_alpha', type=float, default=0.5, metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
     parser.add_argument('--client_number', type=int, default=16, metavar='NN',

@@ -69,7 +69,7 @@ class PNB_loss():
         else : 
             for i in range(len(y_true)):
                 loss_pos =  -1 * (torch.log(y_pred[i][y_true[i]] + epsilon))
-                loss += self.pos_weights[client_idx][y_true[i]] * loss_pos
+                loss += self.mu *self.pos_weights[client_idx][y_true[i]] * loss_pos
                 # self.pos_weights[client_idx][y_true[i]] * 
             loss /= len(y_true)
         return loss

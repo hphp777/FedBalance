@@ -15,9 +15,9 @@ import math
 class PNB_loss():
 
     def __init__(self, dataset, pos_freq, neg_freq):
-        self.beta = 0.9999999
-        self.alpha = 10
-        self.mu = 1.0
+        self.beta = 0.9999
+        self.alpha = 1
+        self.mu = 5.0
         self.dataset = dataset
         self.pos_freq = np.array(pos_freq)
         print("Pos: ", self.pos_freq)
@@ -75,7 +75,7 @@ class PNB_loss():
         else : 
             for i in range(len(y_true)):
                 loss_pos =  -1 * (torch.log(y_pred[i][y_true[i]] + epsilon))
-                loss += self.pos_weights[client_idx][y_true[i]] * loss_pos
+                loss += self.mu * self.pos_weights[client_idx][y_true[i]] * loss_pos
                 # self.pos_weights[client_idx][y_true[i]] * 
             loss /= len(y_true)
         return loss

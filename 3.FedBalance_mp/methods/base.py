@@ -144,7 +144,7 @@ class Base_Server():
         if acc > self.acc:
             torch.save(self.model.state_dict(), '{}/{}.pt'.format(self.save_path, 'server'))
             self.acc = acc
-        acc_path = '{}/logs/{}_{}(1)_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
+        acc_path = '{}/logs/{}_{}_harmony_acc.txt'.format(os.getcwd(), self.args.dataset,self.args.method)
         f = open(acc_path, 'a')
         f.write(str(acc) + '\n')
         f.close()
