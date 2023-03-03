@@ -821,11 +821,14 @@ def load_partition_data(data_dir, partition_method, partition_alpha, client_numb
         # indices = distribute_indices(length, 1, client_number)
         for i in range(client_number):
             data = NIHTrainDataset(i, data_dir, transform = _data_transforms_NIH(), indices=indices[i])
+            total_ds_cnt = np.array(data.total_ds_cnt)
             client_imbalances.append(data.imbalance)
             train_percentage = 0.8
             train_dataset, val_dataset = torch.utils.data.random_split(data, [int(len(data)*train_percentage), len(data)-int(len(data)*train_percentage)])
             train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = 32, shuffle = True)
             val_loader = torch.utils.data.DataLoader(val_dataset, batch_size = 32, shuffle = not True)
+            client_pos_freq.append(total_ds_cnt.tolist())
+            client_neg_freq.append((total_ds_cnt.sum() - total_ds_cnt).tolist())
             train_data_local_dict[i] = train_loader
             test_data_local_dict[i] = val_loader
         client_imbalances = np.array(client_imbalances)

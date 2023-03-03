@@ -5,11 +5,12 @@ import numpy as np
 import torch.nn as nn
 import logging
 from torch.multiprocessing import current_process
+import matplotlib.pyplot as plt
 
 class PNB_loss():
 
     def __init__(self, dataset, pos_freq, neg_freq):
-        self.beta = 0.9999999
+        self.beta = 0.9999
         self.alpha = 10
         self.mu = 1.0
         self.dataset = dataset
@@ -17,10 +18,15 @@ class PNB_loss():
         print("Pos: ", self.pos_freq)
         self.neg_freq = np.array(neg_freq)
         self.pos_weights = self.get_inverse_effective_number(self.beta, self.pos_freq)
-        self.neg_weights = self.get_inverse_effective_number(self.beta, self.neg_freq)       
+        self.neg_weights = self.get_inverse_effective_number(self.beta, self.neg_freq)
+        print("Pos weight1 : ", self.pos_weights)
+        print("Neg weight2 : ", self.neg_weights)
+               
         
         #temp
         self.total = self.pos_weights + self.neg_weights
+        # self.pos_weights = self.pos_weights / self.pos_weights.sum() * len(pos_freq[0])
+        # self.neg_weights = self.neg_weights / self.neg_weights.sum() * len(pos_freq[0])W
         self.pos_weights = (self.pos_weights / self.total)
         self.pos_weights = np.nan_to_num(self.pos_weights)
         self.neg_weights = self.neg_weights / self.total
@@ -29,6 +35,50 @@ class PNB_loss():
         print("Neg weight : ", self.neg_weights)
 
         # print("neg effective num : ", self.neg_weights)
+        # plot
+        # #Plot the pos neg balancing
+        bar_width = 0.25
+        x = np.arange(len(pos_freq[0]))
+        pos = np.array(pos_freq[0])
+        neg = np.array(neg_freq[0])
+        # Before
+        plt.figure(figsize=(8,8))
+        plt.title('Pos Neg Distribution', fontsize=20)
+        plt.bar(x,pos/(pos.sum() + neg.sum()), bar_width)
+        plt.bar(x +  bar_width, neg/(pos.sum() + neg.sum()), bar_width)
+        plt.xticks(x, list(range(len(pos_freq[0]))))
+        plt.xlabel('Class ID')
+        plt.ylabel('Contribution')
+        plt.yticks([0.02,0.04,0.06,0.08,0.1,0.12])
+        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_mp/data_distribution/before_balancing.png')
+        plt.clf()
+        #After
+
+        print("1: ", pos*self.pos_weights[0])
+        print("2: ", neg*self.neg_weights[0])
+
+        plt.figure(figsize=(8,8))
+        plt.title('Pos Neg Distribution', fontsize=20)
+        plt.bar(x,(pos*self.pos_weights[0])/((pos * self.pos_weights[0]).sum() + (neg * self.neg_weights[0]).sum()),  bar_width)
+        plt.bar(x + bar_width, (neg * self.neg_weights[0]) / ((pos * self.pos_weights[0]).sum() + (neg * self.neg_weights[0]).sum()), bar_width)
+        plt.xticks(x, list(range(len(pos_freq[0]))))
+        plt.yticks([0.02,0.04,0.06,0.08,0.1,0.12])
+        plt.xlabel('Class ID')
+        plt.ylabel('Contribution')
+        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_mp/data_distribution/middle_balancing.png')
+        plt.clf()
+
+        plt.figure(figsize=(8,8))
+        plt.title('Pos Neg Distribution', fontsize=20)
+        plt.bar(x,(pos*self.pos_weights[0]*self.pos_weights[0])/((pos*self.pos_weights[0]*self.pos_weights[0]).sum() + (neg*self.neg_weights[0] * self.pos_weights[0]).sum()),  bar_width)
+        plt.bar(x + bar_width, (neg*self.neg_weights[0]*self.pos_weights[0]) / ((pos*self.pos_weights[0]*self.pos_weights[0]).sum() + (neg*self.neg_weights[0] * self.pos_weights[0]).sum()), bar_width)
+        plt.xticks(x, list(range(len(pos_freq[0]))))
+        plt.yticks([0.02,0.04,0.06,0.08,0.1,0.12])
+        plt.xlabel('Class ID')
+        plt.ylabel('Contribution')
+        plt.savefig('C:/Users/hb/Desktop/code/3.FedBalance_mp/data_distribution/after_balancing.png')
+        plt.clf()
+        
 
     def get_inverse_effective_number(self, beta, freq): # beta is same for all classes
         sons = np.array(freq) / self.alpha # scaling factor
@@ -40,7 +90,7 @@ class PNB_loss():
                 sons[c][i] = math.pow(beta,sons[c][i])
         sons = np.array(sons)
         En =  (1 - beta) / (1 - sons)
-        En[np.isnan(En)] = En.max()
+        # En[np.isnan(En)] = En.max()
         return En # the form of vector
 
     def __call__(self, client_idx, y_pred, y_true, epsilon=1e-7):

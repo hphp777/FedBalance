@@ -26,13 +26,13 @@ import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='moon', metavar='N',
+    parser.add_argument('--method', type=str, default='fedbalance', metavar='N',
                         help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
-    parser.add_argument('--harmony', type=str, default='y', metavar='N')
-    parser.add_argument('--data_dir', type=str, default="data/cifar100",
+    parser.add_argument('--harmony', type=str, default='n', metavar='N')
+    parser.add_argument('--data_dir', type=str, default="C:/Users/hb/Desktop/data/NIH",
                         help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", C:/Users/hb/Desktop/data/CheXpert-v1.0-small')
 
-    parser.add_argument('--dataset', type=str, default="cifar100",
+    parser.add_argument('--dataset', type=str, default="NIH",
                         help='data directory: cifar100, cifar10, NIH, CheXpert')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
@@ -41,7 +41,7 @@ def add_args(parser):
     parser.add_argument('--partition_alpha', type=float, default=0.5, metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
-    parser.add_argument('--client_number', type=int, default=16, metavar='NN',
+    parser.add_argument('--client_number', type=int, default=5, metavar='NN',
                         help='number of clients in the FL system')
 
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
@@ -76,7 +76,7 @@ def add_args(parser):
     parser.add_argument('--save_client', action='store_true', default=False,
                         help='Save client checkpoints each round')
 
-    parser.add_argument('--thread_number', type=int, default=4, metavar='NN',
+    parser.add_argument('--thread_number', type=int, default=1, metavar='NN',
                         help='number of parallel training threads')
 
     parser.add_argument('--client_sample', type=float, default=1.0, metavar='MT',
