@@ -18,6 +18,13 @@ from torch.multiprocessing import current_process
 import numpy as np
 import random
 from sklearn.metrics import roc_auc_score
+from datetime import datetime
+import os
+
+global result_dir 
+now = datetime.now()
+result_dir = "C:/Users/rhtn9/OneDrive/바탕 화면/code/FedBalance/3.FedBalance_mp/Results/{}_{}H".format(now.date(), str(now.hour))
+
 
 class Client(Base_Client):
     def __init__(self, client_dict, args):
@@ -91,7 +98,7 @@ class Client(Base_Client):
         top_eigenvalue = torch.sqrt(n / torch.norm(v, dim=1).unsqueeze(1))
         return top_eigenvalue
 
-    def test(self):
+    def test(self, client_idx):
         self.model.to(self.device)
         self.model.eval()
         test_correct = 0.0
@@ -137,12 +144,26 @@ class Client(Base_Client):
                 return auc
             else:
                 logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                f = open(result_dir + "/performance{}.txt".format(client_idx), "a")
+                f.write(str(acc) + "\n")
+                f.close()
                 return acc
 
 class Server(Base_Server):
     def __init__(self,server_dict, args):
         super().__init__(server_dict, args)
         self.model = self.model_type(self.num_classes)
+
+        global result_dir 
+        self.result_dir = result_dir
+        os.mkdir(self.result_dir)
+        self.model_dir = result_dir + "/models"
+        os.mkdir(self.model_dir)
+        c = open(self.result_dir + "/config.txt", "w")
+        c.write("method: {}, dataset: {}, partition_alpha (delta): {}, longtail: {}, ibf: {},  beta: {}, gamma: {}, mu: {}, tau: {}, comm_round: {}, local_epoch: {}, num_of_client: {}, random seed: {}".format(self.args.method, self.args.dataset, str(self.args.partition_alpha),str(self.args.longtail), str(self.args.ibf), str(self.args.beta), str(self.args.gamma) ,str(self.args.mu), str(self.args.tau), str(self.args.comm_round), str(self.args.epochs), str(self.args.client_number), str(self.args.seed)))
+        open(self.result_dir + "/overall_performance.txt", "w")
+        for i in range(args.client_number):
+            open(self.result_dir + "/performance{}.txt".format(i), "w")
 
     def test(self):
         self.model.to(self.device)
@@ -187,4 +208,7 @@ class Server(Base_Server):
                 return auc
             else:
                 logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
+                f = open(result_dir + "/overall_performance.txt", "a")
+                f.write(str(acc) + "\n")
+                f.close()
                 return acc

@@ -5,6 +5,11 @@ from torch.multiprocessing import current_process
 import numpy as np
 import os
 from sklearn.metrics import roc_auc_score,  roc_curve
+from datetime import datetime
+
+# global result_dir 
+# now = datetime.now()
+# result_dir = "C:/Users/rhtn9/OneDrive/바탕 화면/code/FedBalance/3.FedBalance_mp/Results/{}_{}H".format(now.date(), str(now.hour))
 
 
 class Base_Client():
@@ -40,7 +45,7 @@ class Base_Client():
             self.client_index = client_idx
             num_samples = len(self.train_dataloader)*self.args.batch_size
             weights = self.train()
-            acc = self.test()
+            acc = self.test(client_idx)
             client_results.append({'weights':weights, 'num_samples':num_samples,'acc':acc, 'client_index':self.client_index})
             if self.args.client_sample < 1.0 and self.train_dataloader._iterator is not None:
                 self.train_dataloader._iterator._shutdown_workers()
@@ -79,7 +84,7 @@ class Base_Client():
         weights = self.model.cpu().state_dict()
         return weights
 
-    def test(self):
+    def test(self, client_idx):
         self.model.to(self.device)
         self.model.eval()
         sigmoid = torch.nn.Sigmoid()
@@ -121,6 +126,9 @@ class Base_Client():
                 return auc
             else:
                 logging.info("************* Client {} Acc = {:.2f} **************".format(self.client_index, acc))
+                f = open(result_dir + "/performance{}.txt".format(client_idx), "a")
+                f.write(str(acc) + "\n")
+                f.close()
                 return acc
     
 class Base_Server():
@@ -135,6 +143,17 @@ class Base_Server():
         self.round = 0
         self.args = args
         self.save_path = server_dict['save_path']
+
+        # global result_dir 
+        # self.result_dir = result_dir
+        # os.mkdir(self.result_dir)
+        # self.model_dir = result_dir + "/models"
+        # os.mkdir(self.model_dir)
+        # c = open(self.result_dir + "/config.txt", "w")
+        # c.write("method: {}, dataset: {}, partition_alpha (delta): {}, longtail: {}, ibf: {},  beta: {}, gamma: {}, mu: {}, tau: {}, comm_round: {}, local_epoch: {}, num_of_client: {}, random seed: {}".format(self.args.method, self.args.dataset, str(self.args.partition_alpha),str(self.args.longtail), str(self.args.ibf), str(self.args.beta), str(self.args.gamma) ,str(self.args.mu), str(self.args.tau), str(self.args.comm_round), str(self.args.epochs), str(self.args.client_number), str(self.args.seed)))
+        # open(self.result_dir + "/overall_performance.txt", "w")
+        # for i in range(args.client_number):
+        #     open(self.result_dir + "/performance{}.txt".format(i), "w")
 
     def run(self, received_info):
         server_outputs = self.operations(received_info)
@@ -218,4 +237,7 @@ class Base_Server():
                 return auc * 100
             else:
                 logging.info("***** Server Acc = {:.4f} *********************************************************************".format(acc))
+                f = open(result_dir + "/overall_performance.txt", "a")
+                f.write(str(acc) + "\n")
+                f.close()
                 return acc

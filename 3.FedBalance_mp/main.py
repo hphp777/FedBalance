@@ -21,27 +21,34 @@ import methods.fedavg as fedavg
 import methods.fedprox as fedprox
 import methods.moon as moon
 import methods.fedalign as fedalign
+import methods.fedlc as fedlc
 import methods.fedbalance as fedbalance
 import data_preprocessing.custom_multiprocess as cm
 
 def add_args(parser):
     # Training settings
-    parser.add_argument('--method', type=str, default='fedbalance', metavar='N',
-                        help='Options are: fedavg, fedprox, moon, fedalign, fedbalance')
+    parser.add_argument('--method', type=str, default='fedalign', metavar='N',
+                        help='Options are: fedavg, fedprox, moon, fedalign, fedbalance, fedlc')
+    
     parser.add_argument('--harmony', type=str, default='n', metavar='N')
-    parser.add_argument('--data_dir', type=str, default="C:/Users/hb/Desktop/data/NIH",
+
+    parser.add_argument('--longtail', type=bool, default= False, metavar='N')
+
+    parser.add_argument('--ibf', type =float, default= 0.25, metavar='N')
+
+    parser.add_argument('--data_dir', type=str, default="data/cifar10",
                         help='data directory: data/cifar100, data/cifar10, "C:/Users/hb/Desktop/data/NIH", C:/Users/hb/Desktop/data/CheXpert-v1.0-small')
 
-    parser.add_argument('--dataset', type=str, default="NIH",
+    parser.add_argument('--dataset', type=str, default="cifar10",
                         help='data directory: cifar100, cifar10, NIH, CheXpert')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local clients')
 
-    parser.add_argument('--partition_alpha', type=float, default=0.5, metavar='PA',
+    parser.add_argument('--partition_alpha', type=float, default= 0.5 , metavar='PA',
                         help='alpha value for Dirichlet distribution partitioning of data(default: 0.5)')
 
-    parser.add_argument('--client_number', type=int, default=5, metavar='NN',
+    parser.add_argument('--client_number', type=int, default=10, metavar='NN',
                         help='number of clients in the FL system')
 
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
@@ -52,17 +59,29 @@ def add_args(parser):
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.0001)
 
-    parser.add_argument('--epochs', type=int, default=20, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
                         help='how many epochs will be trained locally per round')
 
-    parser.add_argument('--comm_round', type=int, default=30,
+    parser.add_argument('--comm_round', type=int, default=20,
                         help='how many rounds of communications are conducted')
 
     parser.add_argument('--pretrained', action='store_true', default=False,  
                         help='test pretrained model')
 
-    parser.add_argument('--mu', type=float, default=1.0, metavar='MU',
+    parser.add_argument('--mu', type=float, default= 0.45, metavar='MU',
                         help='mu value for various methods')
+    
+    parser.add_argument('--tau', type=float, default=15, metavar='TAU',
+                        help='mu value for various methods')
+    
+    parser.add_argument('--beta', type=float, default=0.9999, metavar='BETA',
+                        help='mu value for various methods')
+    
+    parser.add_argument('--seed', type=int, default=1, metavar='GAMMA',
+                        help='When 1 : data skewness, When 0 : data amount')
+    
+    parser.add_argument('--gamma', type=float, default=0, metavar='GAMMA',
+                        help='When 1 : data skewness, When 0 : data amount')
 
     parser.add_argument('--width', type=float, default=0.25, metavar='WI',
                         help='minimum width for subnet training')
@@ -76,7 +95,7 @@ def add_args(parser):
     parser.add_argument('--save_client', action='store_true', default=False,
                         help='Save client checkpoints each round')
 
-    parser.add_argument('--thread_number', type=int, default=1, metavar='NN',
+    parser.add_argument('--thread_number', type=int, default=5, metavar='NN',
                         help='number of parallel training threads')
 
     parser.add_argument('--client_sample', type=float, default=1.0, metavar='MT',
@@ -85,8 +104,6 @@ def add_args(parser):
     parser.add_argument('--stoch_depth', default=0.5, type=float,
                     help='stochastic depth probability')
 
-    parser.add_argument('--gamma', default=0.0, type=float,
-                    help='hyperparameter gamma for mixup')
     args = parser.parse_args()
 
     return args
@@ -197,6 +214,17 @@ if __name__ == "__main__":
         client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
                             'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
                             'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir, 'harmony': args.harmony,
+                            'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
+    elif args.method=='fedlc':
+        Server = fedlc.Server
+        Client = fedlc.Client
+        Model = resnet56
+        width_range = [args.width, 1.0]
+        resolutions = [32] if 'cifar' in args.data_dir else [224]
+        server_dict = {'train_data':train_data_global, 'test_data': test_data_global, 'model_type': Model, 'num_classes': class_num, 'dir': args.data_dir, 'imbalances': client_imbalances}
+        client_dict = [{'train_data':train_data_local_dict, 'test_data': test_data_local_dict, 'device': i % torch.cuda.device_count(),
+                            'client_map':mapping_dict[i], 'model_type': Model, 'num_classes': class_num, 
+                            'width_range': width_range, 'resolutions': resolutions, 'dir': args.data_dir,
                             'clients_pos': client_pos_freq, 'clients_neg': client_neg_freq} for i in range(args.thread_number)]
     elif args.method=='fedbalance':
         Server = fedbalance.Server
